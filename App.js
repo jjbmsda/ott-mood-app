@@ -1,425 +1,387 @@
+// App.js
 import React, { useState, useEffect } from "react";
 import {
-  StyleSheet,
-  Text,
   View,
+  Text,
   TouchableOpacity,
+  StyleSheet,
   FlatList,
   ActivityIndicator,
   Image,
-  ScrollView,
+  SafeAreaView,
 } from "react-native";
+import { NavigationContainer } from "@react-navigation/native";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
-const TMDB_API_KEY = "f276e46996150c5b6a693f773ad2cdee";
-const TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p";
+const Stack = createNativeStackNavigator();
 
-// UI에 보여줄 OTT 이름들
-const OTT_NAMES = ["Netflix", "Disney+", "Wavve", "TVING", "Watcha"];
+// 🔑 TMDB 설정
+const TMDB_API_KEY = "f276e46996150c5b6a693f773ad2cdee"; // ← 여기에 본인 키 넣기
+const TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w500";
 
-// 기분 옵션
-const MOODS = ["행복", "슬픔", "설렘", "우울", "지침", "심심함"];
-
-// 기분 → TMDB 장르 ID 매핑 (대략적인 예시)
-const moodGenreMap = {
-  행복: "35", // 코미디
-  슬픔: "18", // 드라마
-  설렘: "10749", // 로맨스
-  우울: "18,80", // 드라마 + 범죄 느낌
-  지침: "28,53", // 액션 + 스릴러
-  심심함: "35,12", // 코미디 + 모험
+// OTT → TMDB provider_id 매핑 (KR 기준)
+const PROVIDER_IDS = {
+  Netflix: 8,
+  "Disney+": 337,
+  Watcha: 97,
+  Wavve: 356,
+  TVING: 283,
 };
 
-// 문자열 비교용 정규화 (영문/숫자만 남기기)
-const normalizeName = (str) => str.toLowerCase().replace(/[^a-z0-9]/g, "");
+// 기분 → 장르 매핑 (단순 예시)
+const MOOD_GENRES = {
+  행복해요: 35, // 코미디
+  우울해요: 18, // 드라마
+  설레요: 10749, // 로맨스
+  신나요: 28, // 액션
+  아무거나: null, // 장르 제한 없음
+};
 
-export default function App() {
-  const [selectedOtt, setSelectedOtt] = useState(null);
-  const [selectedMood, setSelectedMood] = useState(null);
+/**
+ * 1️⃣ 첫 화면: 기분 선택
+ */
+function MoodScreen({ navigation }) {
+  const moods = ["행복해요", "우울해요", "설레요", "신나요", "아무거나"];
 
-  const [providers, setProviders] = useState([]);
-  const [titles, setTitles] = useState([]);
+  return (
+    <SafeAreaView style={styles.container}>
+      <Text style={styles.appTitle}>오늘 기분은 어때요?</Text>
+      <Text style={styles.subtitle}>
+        기분을 선택하면 다음 화면에서 OTT를 고를 수 있어요.
+      </Text>
 
-  const [loading, setLoading] = useState(false);
-  const [loadingProviders, setLoadingProviders] = useState(false);
-  const [error, setError] = useState(null);
+      <View style={styles.moodRow}>
+        {moods.map((mood) => (
+          <TouchableOpacity
+            key={mood}
+            style={styles.moodButton}
+            onPress={() => navigation.navigate("OttSelect", { mood })}
+          >
+            <Text style={styles.moodButtonText}>{mood}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </SafeAreaView>
+  );
+}
 
-  // 전역 중복 제거용: { [movieId]: "Netflix" 같은 형태 }
-  const [shownMovieIds, setShownMovieIds] = useState({});
+/**
+ * 2️⃣ 두 번째 화면: OTT 선택
+ * - MoodScreen 에서 넘겨준 mood를 route.params로 받음
+ * - OTT 선택시 MovieListScreen으로 이동
+ */
+function OttScreen({ navigation, route }) {
+  const { mood } = route.params;
+  const otts = ["Netflix", "Disney+", "Watcha", "Wavve", "TVING"];
 
-  // 1) 앱 로드시: TMDB watch providers (KR) 로딩
+  return (
+    <SafeAreaView style={styles.container}>
+      <Text style={styles.appTitle}>어디에서 볼까요?</Text>
+      <Text style={styles.subtitle}>
+        선택한 기분: <Text style={styles.highlight}>{mood}</Text>
+      </Text>
+
+      <View style={styles.ottRow}>
+        {otts.map((name) => (
+          <TouchableOpacity
+            key={name}
+            style={styles.ottButton}
+            onPress={() =>
+              navigation.navigate("MovieList", {
+                mood,
+                ott: name,
+              })
+            }
+          >
+            <Text style={styles.ottButtonText}>{name}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </SafeAreaView>
+  );
+}
+
+/**
+ * 3️⃣ 세 번째 화면: 영화 리스트
+ * - route.params.mood / ott 사용해 TMDB 호출
+ */
+function MovieListScreen({ navigation, route }) {
+  const { mood, ott } = route.params;
+  const [movies, setMovies] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState("");
+
   useEffect(() => {
-    const fetchProviders = async () => {
+    const fetchMovies = async () => {
       try {
-        setLoadingProviders(true);
-        const url = `https://api.themoviedb.org/3/watch/providers/movie?api_key=${TMDB_API_KEY}&language=ko-KR&watch_region=KR`;
-        const res = await fetch(url);
-        const json = await res.json();
-        setProviders(json.results || []);
+        setLoading(true);
+        setErrorMsg("");
 
-        // 어떤 provider들이 있는지 확인용 로그
-        console.log(
-          "TMDB providers in KR:",
-          (json.results || []).map((p) => p.provider_name)
-        );
+        const providerId = PROVIDER_IDS[ott];
+        const genreId = MOOD_GENRES[mood];
+
+        let url = `https://api.themoviedb.org/3/discover/movie?api_key=${TMDB_API_KEY}&language=ko-KR&region=KR&include_adult=false&include_video=false&sort_by=popularity.desc&page=1&with_watch_providers=${providerId}&watch_region=KR`;
+
+        if (genreId) {
+          url += `&with_genres=${genreId}`;
+        }
+
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (!data.results || data.results.length === 0) {
+          setMovies([]);
+          setErrorMsg("조건에 맞는 작품을 찾지 못했습니다.");
+        } else {
+          setMovies(data.results);
+        }
       } catch (e) {
-        console.error(e);
+        console.warn(e);
+        setErrorMsg("영화 목록을 가져오는 중 오류가 발생했습니다.");
       } finally {
-        setLoadingProviders(false);
+        setLoading(false);
       }
     };
 
-    fetchProviders();
-  }, []);
+    fetchMovies();
+  }, [mood, ott]);
 
-  // TMDB provider 목록에서 OTT 이름에 해당하는 provider 찾기
-  const getProviderInfoByName = (name) => {
-    if (!providers || providers.length === 0) return null;
-
-    const target = normalizeName(name);
-
-    // 1차: 정규화된 이름 완전 일치
-    let found =
-      providers.find((p) => normalizeName(p.provider_name) === target) || null;
-
-    if (found) return found;
-
-    // 2차: 부분 포함 (예: disney vs disneyplus)
-    found =
-      providers.find((p) => {
-        const nv = normalizeName(p.provider_name);
-        return nv.includes(target) || target.includes(nv);
-      }) || null;
-
-    return found;
-  };
-
-  // 2) OTT + 기분 조합으로 영화 가져오기
-  const fetchTitlesByOttAndMood = async (ottName, mood) => {
-    const providerInfo = getProviderInfoByName(ottName);
-
-    if (!providerInfo) {
-      setError(
-        `${ottName}에 해당하는 TMDB 제공사(provider)를 찾지 못했습니다. 한국 region에서 미지원일 수 있습니다.`
-      );
-      setTitles([]);
-      return;
-    }
-
-    const providerId = providerInfo.provider_id;
-    const genreParam = mood ? moodGenreMap[mood] : null;
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      let url = `https://api.themoviedb.org/3/discover/movie?api_key=${TMDB_API_KEY}&language=ko-KR&sort_by=popularity.desc&with_watch_providers=${providerId}&watch_region=KR&page=1&include_adult=false`;
-
-      // 기분에 따라 장르 필터 추가
-      if (genreParam) {
-        url += `&with_genres=${genreParam}`;
-      }
-
-      const res = await fetch(url);
-      const json = await res.json();
-      const results = json.results || [];
-
-      // ✅ OTT 기준 전역 중복 제거
-      // - 처음 등장 OTT가 나(ottName)면 OK
-      // - 다른 OTT에서 먼저 등장한 영화는 제외
-      const filtered = results.filter((movie) => {
-        const firstOtt = shownMovieIds[movie.id];
-        if (!firstOtt) return true; // 아직 안 나온 영화
-        return firstOtt === ottName; // 나에서 처음 나온 영화만 유지
-      });
-
-      // 처음 등장하는 영화에 대해서만 최초 OTT 기록
-      setShownMovieIds((prev) => {
-        const next = { ...prev };
-        filtered.forEach((movie) => {
-          if (!next[movie.id]) {
-            next[movie.id] = ottName;
-          }
-        });
-        return next;
-      });
-
-      setTitles(filtered);
-    } catch (e) {
-      console.error(e);
-      setError("작품 리스트를 불러오는 중 오류가 발생했습니다.");
-      setTitles([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // OTT 선택 시
-  const onSelectOtt = (ottName) => {
-    setSelectedOtt(ottName);
-    if (ottName) {
-      fetchTitlesByOttAndMood(ottName, selectedMood);
-    }
-  };
-
-  // 기분 선택 시
-  const onSelectMood = (mood) => {
-    setSelectedMood(mood);
-    if (selectedOtt) {
-      fetchTitlesByOttAndMood(selectedOtt, mood);
-    }
-  };
-
-  // 선택된 OTT의 provider/로고
-  const selectedProviderInfo = selectedOtt
-    ? getProviderInfoByName(selectedOtt)
-    : null;
-
-  const selectedProviderLogo = selectedProviderInfo?.logo_path
-    ? `${TMDB_IMAGE_BASE}/w200${selectedProviderInfo.logo_path}`
-    : null;
-
-  const renderTitleItem = ({ item }) => {
-    const posterUrl = item.poster_path
-      ? `${TMDB_IMAGE_BASE}/w342${item.poster_path}`
-      : null;
-
+  const renderItem = ({ item }) => {
     return (
       <View style={styles.card}>
-        {posterUrl ? (
-          <Image source={{ uri: posterUrl }} style={styles.poster} />
+        {item.poster_path ? (
+          <Image
+            source={{ uri: `${TMDB_IMAGE_BASE}${item.poster_path}` }}
+            style={styles.poster}
+          />
         ) : (
           <View style={[styles.poster, styles.posterPlaceholder]}>
-            <Text style={{ color: "#888" }}>No Image</Text>
+            <Text style={styles.posterPlaceholderText}>No Image</Text>
           </View>
         )}
-        <View style={styles.cardTextContainer}>
-          <Text style={styles.cardTitle}>{item.title}</Text>
-          <Text style={styles.cardSub}>
-            개봉일: {item.release_date || "정보 없음"}
+        <View style={styles.cardContent}>
+          <Text style={styles.movieTitle} numberOfLines={2}>
+            {item.title || item.name}
           </Text>
-          <Text style={styles.cardSub}>
-            평점: {item.vote_average ? item.vote_average.toFixed(1) : "N/A"}
+          <Text style={styles.movieMeta}>
+            ⭐ {item.vote_average?.toFixed(1) || "N/A"} / 10
           </Text>
+          {item.overview ? (
+            <Text style={styles.movieOverview} numberOfLines={3}>
+              {item.overview}
+            </Text>
+          ) : null}
         </View>
       </View>
     );
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>🎬 OTT + 기분 기반 추천 (TMDB)</Text>
+    <SafeAreaView style={styles.container}>
+      <Text style={styles.appTitle}>추천 결과</Text>
+      <Text style={styles.subtitle}>
+        기분 <Text style={styles.highlight}>{mood}</Text> 일 때,{" "}
+        <Text style={styles.highlight}>{ott}</Text> 에서 볼 수 있는 작품이에요.
+      </Text>
 
-      {/* 기분 선택 */}
-      <Text style={styles.sectionTitle}>오늘 기분은?</Text>
-      <View style={styles.moodRow}>
-        {MOODS.map((mood) => (
-          <TouchableOpacity
-            key={mood}
-            style={[
-              styles.moodButton,
-              selectedMood === mood && styles.moodButtonSelected,
-            ]}
-            onPress={() => onSelectMood(mood)}
-          >
-            <Text
-              style={[
-                styles.moodButtonText,
-                selectedMood === mood && styles.moodButtonTextSelected,
-              ]}
-            >
-              {mood}
-            </Text>
-          </TouchableOpacity>
-        ))}
+      <View style={styles.topButtonsRow}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.smallButton}
+        >
+          <Text style={styles.smallButtonText}>OTT 다시 선택</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => navigation.popToTop()}
+          style={styles.smallButtonOutline}
+        >
+          <Text style={styles.smallButtonOutlineText}>기분 다시 선택</Text>
+        </TouchableOpacity>
       </View>
 
-      {/* OTT 선택 */}
-      <Text style={styles.sectionTitle}>어디에서 볼까?</Text>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={{ marginBottom: 10 }}
-      >
-        {OTT_NAMES.map((name) => (
-          <TouchableOpacity
-            key={name}
-            style={[
-              styles.ottButton,
-              selectedOtt === name && styles.ottButtonSelected,
-            ]}
-            onPress={() => onSelectOtt(name)}
-          >
-            <Text
-              style={[
-                styles.ottButtonText,
-                selectedOtt === name && styles.ottButtonTextSelected,
-              ]}
-            >
-              {name}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-
-      {/* OTT 로고 + 상태 안내 */}
-      {loadingProviders ? (
-        <ActivityIndicator size="small" />
-      ) : selectedOtt && selectedProviderLogo ? (
-        <View style={styles.logoContainer}>
-          <Image source={{ uri: selectedProviderLogo }} style={styles.logo} />
-          <Text style={styles.providerName}>
-            {selectedProviderInfo?.provider_name}
-          </Text>
-        </View>
-      ) : selectedOtt ? (
-        <Text style={styles.infoText}>
-          {selectedOtt}에 대한 로고 정보를 찾지 못했습니다.
-        </Text>
-      ) : (
-        <Text style={styles.infoText}>
-          OTT와 기분을 선택하면 추천 영화 리스트를 보여드립니다.
-        </Text>
-      )}
-
-      {/* 추천 리스트 */}
       {loading ? (
-        <ActivityIndicator size="large" style={{ marginTop: 20 }} />
-      ) : error ? (
-        <Text style={styles.errorText}>{error}</Text>
-      ) : titles.length === 0 && selectedOtt ? (
-        <Text style={styles.infoText}>
-          조건에 맞는 작품을 찾지 못했습니다. 기분이나 OTT를 바꿔보세요.
-        </Text>
+        <View style={styles.centerArea}>
+          <ActivityIndicator size="large" />
+          <Text style={styles.infoText}>영화를 불러오는 중입니다…</Text>
+        </View>
+      ) : errorMsg ? (
+        <View style={styles.centerArea}>
+          <Text style={styles.infoText}>{errorMsg}</Text>
+        </View>
       ) : (
         <FlatList
-          data={titles}
+          data={movies}
           keyExtractor={(item) => String(item.id)}
-          renderItem={renderTitleItem}
-          style={{ marginTop: 10 }}
+          renderItem={renderItem}
+          contentContainerStyle={styles.listContent}
         />
       )}
-    </View>
+    </SafeAreaView>
   );
 }
 
+/**
+ * 루트 컴포넌트: 네비게이션 설정
+ */
+export default function App() {
+  return (
+    <NavigationContainer>
+      <Stack.Navigator>
+        <Stack.Screen
+          name="MoodSelect"
+          component={MoodScreen}
+          options={{ title: "오늘 기분" }}
+        />
+        <Stack.Screen
+          name="OttSelect"
+          component={OttScreen}
+          options={{ title: "어디에서 볼까?" }}
+        />
+        <Stack.Screen
+          name="MovieList"
+          component={MovieListScreen}
+          options={{ title: "추천 결과" }}
+        />
+      </Stack.Navigator>
+    </NavigationContainer>
+  );
+}
+
+// 🎨 스타일
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
-    paddingTop: 60,
+    backgroundColor: "#ffffff",
+    paddingTop: 24,
     paddingHorizontal: 16,
   },
-  title: {
+  appTitle: {
     fontSize: 22,
-    fontWeight: "bold",
-    marginBottom: 12,
-    textAlign: "center",
+    fontWeight: "700",
+    marginBottom: 8,
+    color: "#111",
   },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    marginTop: 12,
-    marginBottom: 6,
+  subtitle: {
+    fontSize: 14,
+    color: "#555",
+    marginBottom: 16,
+  },
+  highlight: {
+    fontWeight: "700",
+    color: "#111",
   },
   moodRow: {
     flexDirection: "row",
     flexWrap: "wrap",
+    gap: 8,
   },
   moodButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
     borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "#ddd",
+    backgroundColor: "#111",
     marginRight: 8,
     marginBottom: 8,
   },
-  moodButtonSelected: {
-    backgroundColor: "#FFB347",
-    borderColor: "#FFB347",
-  },
   moodButtonText: {
-    fontSize: 13,
-    color: "#333",
-  },
-  moodButtonTextSelected: {
     color: "#fff",
-    fontWeight: "600",
+    fontSize: 14,
+  },
+  ottRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
   },
   ottButton: {
     paddingVertical: 8,
     paddingHorizontal: 14,
-    borderRadius: 20,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: "#ccc",
-    marginRight: 8,
-  },
-  ottButtonSelected: {
-    backgroundColor: "#4C9AFF",
-    borderColor: "#4C9AFF",
+    borderColor: "#ddd",
+    backgroundColor: "#fff",
   },
   ottButtonText: {
-    fontSize: 14,
+    fontSize: 13,
     color: "#333",
   },
-  ottButtonTextSelected: {
-    color: "#fff",
-    fontWeight: "600",
-  },
-  logoContainer: {
-    alignItems: "center",
-    marginVertical: 10,
-  },
-  logo: {
-    width: 120,
-    height: 60,
-    resizeMode: "contain",
-  },
-  providerName: {
+  topButtonsRow: {
+    flexDirection: "row",
+    marginBottom: 12,
     marginTop: 4,
-    fontSize: 14,
-    color: "#444",
+    gap: 8,
+  },
+  smallButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    backgroundColor: "#111",
+  },
+  smallButtonText: {
+    color: "#fff",
+    fontSize: 12,
+  },
+  smallButtonOutline: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#999",
+  },
+  smallButtonOutlineText: {
+    color: "#555",
+    fontSize: 12,
+  },
+  centerArea: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
   infoText: {
     marginTop: 8,
-    fontSize: 13,
-    color: "#666",
-  },
-  errorText: {
-    marginTop: 10,
-    color: "red",
     fontSize: 14,
+    color: "#555",
+  },
+  listContent: {
+    paddingVertical: 8,
   },
   card: {
     flexDirection: "row",
     marginBottom: 12,
-    padding: 8,
-    borderRadius: 8,
-    backgroundColor: "#fafafa",
+    borderRadius: 12,
+    backgroundColor: "#f7f7f7",
+    overflow: "hidden",
   },
   poster: {
-    width: 80,
-    height: 120,
-    borderRadius: 4,
-    backgroundColor: "#ddd",
+    width: 90,
+    height: 130,
+    borderTopLeftRadius: 12,
+    borderBottomLeftRadius: 12,
   },
   posterPlaceholder: {
-    justifyContent: "center",
+    backgroundColor: "#ddd",
     alignItems: "center",
-  },
-  cardTextContainer: {
-    flex: 1,
-    marginLeft: 10,
     justifyContent: "center",
   },
-  cardTitle: {
-    fontSize: 16,
+  posterPlaceholderText: {
+    fontSize: 10,
+    color: "#666",
+  },
+  cardContent: {
+    flex: 1,
+    padding: 10,
+  },
+  movieTitle: {
+    fontSize: 15,
     fontWeight: "600",
     marginBottom: 4,
   },
-  cardSub: {
+  movieMeta: {
+    fontSize: 12,
+    color: "#777",
+    marginBottom: 4,
+  },
+  movieOverview: {
     fontSize: 12,
     color: "#555",
-    marginBottom: 2,
   },
 });
