@@ -571,13 +571,18 @@ function ResultsScreen({ route, navigation }) {
 
   const renderMovieCard = ({ item }) => {
     const isFav = favorites.some((f) => f.id === item.id);
-    const trailerUrl = trailers[item.id]; // 🔴 이 영화의 예고편 URL
+    const trailerUrl = trailers[item.id]; // 이 영화의 예고편 URL
+
     return (
       <TouchableOpacity
-        style={styles.movieCard}
+        style={[
+          styles.movieCard,
+          trailerUrl && styles.movieCardWithTrailer, // 예고편 있는 카드만 붉은 테두리
+        ]}
         activeOpacity={0.9}
         onPress={() => openDetail(item)}
       >
+        {/* 포스터 영역 */}
         <View style={styles.moviePosterWrapper}>
           {item.poster_path ? (
             <Image
@@ -587,6 +592,7 @@ function ResultsScreen({ route, navigation }) {
           ) : null}
         </View>
 
+        {/* 정보 영역 */}
         <View style={styles.movieInfoArea}>
           <View>
             <Text style={styles.movieTitle} numberOfLines={2}>
@@ -611,17 +617,25 @@ function ResultsScreen({ route, navigation }) {
               </Text>
             </TouchableOpacity>
 
+            {/* 예고편 있는 경우에만 유튜브 버튼 표시 */}
             {trailerUrl && (
               <TouchableOpacity
                 style={styles.trailerButton}
                 onPress={() => openTrailer(item.id)}
                 activeOpacity={0.85}
               >
-                <Text style={styles.trailerButtonText}>YouTube 예고편</Text>
+                <Text style={styles.trailerButtonText}>▶ YouTube 예고편</Text>
               </TouchableOpacity>
             )}
           </View>
         </View>
+
+        {/* 카드 오른쪽 위 유튜브 배지 (예고편 있을 때만) */}
+        {trailerUrl && (
+          <View style={styles.youtubeBadge}>
+            <Text style={styles.youtubeBadgeText}>▶</Text>
+          </View>
+        )}
       </TouchableOpacity>
     );
   };
@@ -786,7 +800,7 @@ function ResultsScreen({ route, navigation }) {
                     onPress={() => openTrailer(selectedMovie.id)}
                   >
                     <Text style={styles.modalTrailerButtonText}>
-                      YouTube 예고편
+                      ▶ YouTube 예고편
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -1026,6 +1040,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#0B1120",
     marginBottom: 12,
     overflow: "hidden",
+    position: "relative",
+  },
+  movieCardWithTrailer: {
+    borderWidth: 1,
+    borderColor: "#EF4444", // 살짝 밝은 레드 (tailwind red-500 느낌)
   },
   moviePosterWrapper: {
     width: 90,
@@ -1172,5 +1191,26 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
     color: "#F9FAFB",
+  },
+  youtubeBadge: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#FF0000",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  youtubeBadgeText: {
+    color: "#F9FAFB",
+    fontSize: 12,
+    fontWeight: "700",
   },
 });
