@@ -11,18 +11,16 @@ import {
   ActivityIndicator,
   Linking,
   StatusBar,
-  SafeAreaView,
   Platform,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-
-// =========================
-// 공통 상수 (안드로이드 StatusBar 여백)
-// =========================
-const STATUS_BAR_HEIGHT =
-  Platform.OS === "android" ? StatusBar.currentHeight || 24 : 0;
+import {
+  SafeAreaProvider,
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 
 // =========================
 // TMDB / OTT / 설문 데이터
@@ -221,6 +219,7 @@ async function fetchBestTrailer(movieId) {
 // 1. 기분 설문 화면
 // =========================
 function MoodScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const [answers, setAnswers] = useState({});
   const [currentIndex, setCurrentIndex] = useState(0);
   const [error, setError] = useState("");
@@ -308,8 +307,17 @@ function MoodScreen({ navigation }) {
   };
 
   return (
-    <View style={styles.moodScreenWrapper}>
-      <SafeAreaView style={styles.moodScreenContainer}>
+    <View style={styles.screenRoot}>
+      <SafeAreaView
+        style={[
+          styles.moodScreenContainer,
+          {
+            paddingTop: insets.top + 20,
+            paddingBottom: insets.bottom + 16,
+          },
+        ]}
+        edges={["top", "bottom"]}
+      >
         {/* 상단 */}
         <View style={styles.moodTopRow}>
           <Text style={styles.moodTopLabel}>오늘의 기분</Text>
@@ -354,7 +362,12 @@ function MoodScreen({ navigation }) {
         {error ? <Text style={styles.moodErrorText}>{error}</Text> : null}
 
         {/* 하단 네비 */}
-        <View style={styles.moodBottomRow}>
+        <View
+          style={[
+            styles.moodBottomRow,
+            { marginBottom: insets.bottom > 0 ? insets.bottom : 8 },
+          ]}
+        >
           <TouchableOpacity
             style={[
               styles.moodPrevButton,
@@ -385,6 +398,7 @@ function MoodScreen({ navigation }) {
 // 2. OTT 선택 화면
 // =========================
 function OttSelectScreen({ navigation, route }) {
+  const insets = useSafeAreaInsets();
   const { mood } = route.params || {};
   const [selectedOttId, setSelectedOttId] = useState(null);
 
@@ -397,8 +411,17 @@ function OttSelectScreen({ navigation, route }) {
   };
 
   return (
-    <View style={styles.ottScreenWrapper}>
-      <SafeAreaView style={styles.ottScreenContainer}>
+    <View style={styles.screenRoot}>
+      <SafeAreaView
+        style={[
+          styles.ottScreenContainer,
+          {
+            paddingTop: insets.top + 20,
+            paddingBottom: insets.bottom + 16,
+          },
+        ]}
+        edges={["top", "bottom"]}
+      >
         <Text style={styles.sectionTitle}>어디에서 볼까요?</Text>
         <Text style={styles.ottDescriptionText}>
           지금 가입해 둔 OTT를 선택하면,{"\n"}그 안에서 볼 수 있는 작품만 골라
@@ -408,7 +431,10 @@ function OttSelectScreen({ navigation, route }) {
         <FlatList
           data={OTTS}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.ottList}
+          contentContainerStyle={[
+            styles.ottList,
+            { paddingBottom: insets.bottom + 24 },
+          ]}
           renderItem={({ item }) => {
             const isSelected = selectedOttId === item.id;
             return (
@@ -437,6 +463,7 @@ function OttSelectScreen({ navigation, route }) {
 // 3. 추천 결과 화면
 // =========================
 function ResultsScreen({ route, navigation }) {
+  const insets = useSafeAreaInsets();
   const { mood = "아무거나", ott } = route.params || {};
   const [movies, setMovies] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -647,11 +674,20 @@ function ResultsScreen({ route, navigation }) {
   );
 
   return (
-    <View style={styles.resultScreenWrapper}>
-      <SafeAreaView style={styles.resultScreenContainer}>
+    <View style={styles.screenRoot}>
+      <SafeAreaView
+        style={[
+          styles.resultScreenContainer,
+          {
+            paddingTop: insets.top + 16,
+            paddingBottom: insets.bottom + 12,
+          },
+        ]}
+        edges={["top", "bottom"]}
+      >
         {/* 헤더 */}
         <View style={styles.resultHeaderRow}>
-          <View>
+          <View style={{ flex: 1, paddingRight: 8 }}>
             <Text style={styles.sectionTitle}>
               {ott?.name || "OTT"}에서 볼 수 있는 작품
             </Text>
@@ -718,7 +754,9 @@ function ResultsScreen({ route, navigation }) {
             data={movies}
             keyExtractor={(item) => String(item.id)}
             renderItem={renderMovieCard}
-            contentContainerStyle={styles.movieList}
+            contentContainerStyle={{
+              paddingBottom: insets.bottom + 24,
+            }}
           />
         )}
 
@@ -807,7 +845,7 @@ function ResultsScreen({ route, navigation }) {
 // =========================
 const Stack = createNativeStackNavigator();
 
-export default function App() {
+function RootNavigator() {
   return (
     <NavigationContainer>
       <StatusBar barStyle="light-content" backgroundColor="#050816" />
@@ -825,6 +863,14 @@ export default function App() {
   );
 }
 
+export default function App() {
+  return (
+    <SafeAreaProvider>
+      <RootNavigator />
+    </SafeAreaProvider>
+  );
+}
+
 // =========================
 // 스타일
 // =========================
@@ -833,11 +879,6 @@ const styles = StyleSheet.create({
   screenRoot: {
     flex: 1,
     backgroundColor: "#050816",
-  },
-  screenContainer: {
-    flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: STATUS_BAR_HEIGHT + 20,
   },
   sectionTitle: {
     fontSize: 18,
@@ -851,14 +892,9 @@ const styles = StyleSheet.create({
   },
 
   // 1. MoodScreen
-  moodScreenWrapper: {
-    flex: 1,
-    backgroundColor: "#050816",
-  },
   moodScreenContainer: {
     flex: 1,
     paddingHorizontal: 20,
-    paddingTop: STATUS_BAR_HEIGHT + 20,
   },
   moodTopRow: {
     flexDirection: "row",
@@ -916,7 +952,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     marginTop: 24,
-    marginBottom: 20,
   },
   moodPrevButton: {
     paddingVertical: 10,
@@ -946,14 +981,9 @@ const styles = StyleSheet.create({
   },
 
   // 2. OTT 선택 화면
-  ottScreenWrapper: {
-    flex: 1,
-    backgroundColor: "#050816",
-  },
   ottScreenContainer: {
     flex: 1,
     paddingHorizontal: 20,
-    paddingTop: STATUS_BAR_HEIGHT + 20,
   },
   ottDescriptionText: {
     fontSize: 14,
@@ -961,7 +991,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   ottList: {
-    paddingBottom: 24,
+    paddingBottom: 16,
   },
   ottItemRow: {
     flexDirection: "row",
@@ -990,14 +1020,9 @@ const styles = StyleSheet.create({
   },
 
   // 3. 추천 결과 화면
-  resultScreenWrapper: {
-    flex: 1,
-    backgroundColor: "#050816",
-  },
   resultScreenContainer: {
     flex: 1,
     paddingHorizontal: 16,
-    paddingTop: STATUS_BAR_HEIGHT + 16,
   },
   resultHeaderRow: {
     flexDirection: "row",
