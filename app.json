@@ -2,7 +2,7 @@
   "expo": {
     "name": "오늘 뭐 볼까",
     "slug": "ott-mood-app",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "splash": {
@@ -10,7 +10,9 @@
       "resizeMode": "contain",
       "backgroundColor": "#3366FF"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true
     },
@@ -20,10 +22,15 @@
         "backgroundColor": "#3366FF"
       },
       "package": "com.oneul.ottmood",
-      "versionCode": 1
+      "versionCode": 2
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "98078928-0b4f-4d9e-8a4c-18731b8ea06b"
+      }
     }
   }
 }
