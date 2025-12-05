@@ -580,11 +580,12 @@ function ResultsScreen({ route, navigation }) {
       return;
     }
 
-    const supported = await Linking.canOpenURL(url);
-    if (supported) {
+    try {
+      // 바로 링크 열기 시도
       await Linking.openURL(url);
-    } else {
-      alert("이 링크를 열 수 없어요.");
+    } catch (e) {
+      console.warn("Failed to open trailer url", e);
+      alert("예고편 링크를 여는 중 문제가 발생했어요.");
     }
   };
 
