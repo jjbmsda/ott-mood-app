@@ -10,9 +10,7 @@
       "resizeMode": "contain",
       "backgroundColor": "#3366FF"
     },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
+    "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true
     },
@@ -21,7 +19,7 @@
         "foregroundImage": "./assets/adaptive_icon.png",
         "backgroundColor": "#3366FF"
       },
-      "package": "com.oneul.ottmood",
+      "package": "com.oneul.moviemood",
       "versionCode": 2
     },
     "web": {
