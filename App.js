@@ -11,11 +11,14 @@ import {
   ActivityIndicator,
   Linking,
   StatusBar,
-  SafeAreaView,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import {
+  SafeAreaProvider,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 
 // =========================
 // TMDB / OTT / 설문 데이터
@@ -214,6 +217,7 @@ async function fetchBestTrailer(movieId) {
 // 1. 기분 설문 화면
 // =========================
 function MoodScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const [answers, setAnswers] = useState({});
   const [currentIndex, setCurrentIndex] = useState(0);
   const [error, setError] = useState("");
@@ -301,8 +305,16 @@ function MoodScreen({ navigation }) {
   };
 
   return (
-    <View style={styles.moodScreenWrapper}>
-      <SafeAreaView style={styles.moodScreenContainer}>
+    <View style={styles.screenRoot}>
+      <View
+        style={[
+          styles.moodScreenContainer,
+          {
+            paddingTop: insets.top + 16,
+            paddingBottom: insets.bottom + 16,
+          },
+        ]}
+      >
         {/* 상단 */}
         <View style={styles.moodTopRow}>
           <Text style={styles.moodTopLabel}>오늘의 기분</Text>
@@ -369,7 +381,7 @@ function MoodScreen({ navigation }) {
             </Text>
           </TouchableOpacity>
         </View>
-      </SafeAreaView>
+      </View>
     </View>
   );
 }
@@ -378,6 +390,7 @@ function MoodScreen({ navigation }) {
 // 2. OTT 선택 화면
 // =========================
 function OttSelectScreen({ navigation, route }) {
+  const insets = useSafeAreaInsets();
   const { mood } = route.params || {};
   const [selectedOttId, setSelectedOttId] = useState(null);
 
@@ -390,8 +403,16 @@ function OttSelectScreen({ navigation, route }) {
   };
 
   return (
-    <View style={styles.ottScreenWrapper}>
-      <SafeAreaView style={styles.ottScreenContainer}>
+    <View style={styles.screenRoot}>
+      <View
+        style={[
+          styles.ottScreenContainer,
+          {
+            paddingTop: insets.top + 16,
+            paddingBottom: insets.bottom + 16,
+          },
+        ]}
+      >
         <Text style={styles.sectionTitle}>어디에서 볼까요?</Text>
         <Text style={styles.ottDescriptionText}>
           지금 가입해 둔 OTT를 선택하면,{"\n"}그 안에서 볼 수 있는 작품만 골라
@@ -421,7 +442,7 @@ function OttSelectScreen({ navigation, route }) {
             );
           }}
         />
-      </SafeAreaView>
+      </View>
     </View>
   );
 }
@@ -430,6 +451,7 @@ function OttSelectScreen({ navigation, route }) {
 // 3. 추천 결과 화면
 // =========================
 function ResultsScreen({ route, navigation }) {
+  const insets = useSafeAreaInsets();
   const { mood = "아무거나", ott } = route.params || {};
   const [movies, setMovies] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -437,7 +459,6 @@ function ResultsScreen({ route, navigation }) {
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [selectedMovie, setSelectedMovie] = useState(null);
   const [selectedMovieDetail, setSelectedMovieDetail] = useState(null);
-  //const [trailerLoading, setTrailerLoading] = useState(false);
   const [trailers, setTrailers] = useState({}); // { [movieId]: url or null }
 
   // 즐겨찾기 로드
@@ -454,22 +475,7 @@ function ResultsScreen({ route, navigation }) {
     })();
   }, []);
 
-  // 영화 로드
-  useEffect(() => {
-    if (!ott) return;
-    setLoading(true);
-    (async () => {
-      try {
-        const data = await fetchOttMovies(ott, mood);
-        setMovies(data);
-      } catch (e) {
-        console.warn("Failed to fetch movies", e);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [ott, mood]);
-  // 영화 로드
+  // 영화 로드 (중복 제거)
   useEffect(() => {
     if (!ott) return;
     setLoading(true);
@@ -485,7 +491,7 @@ function ResultsScreen({ route, navigation }) {
     })();
   }, [ott, mood]);
 
-  // 🔴 영화 목록 기준으로 예고편 미리 조회
+  // 영화 목록 기준으로 예고편 미리 조회
   useEffect(() => {
     if (!movies || movies.length === 0) return;
 
@@ -553,6 +559,7 @@ function ResultsScreen({ route, navigation }) {
     setSelectedMovie(null);
     setSelectedMovieDetail(null);
   };
+
   const openTrailer = async (movieId) => {
     const url = trailers[movieId];
 
@@ -571,14 +578,11 @@ function ResultsScreen({ route, navigation }) {
 
   const renderMovieCard = ({ item }) => {
     const isFav = favorites.some((f) => f.id === item.id);
-    const trailerUrl = trailers[item.id]; // 이 영화의 예고편 URL
+    const trailerUrl = trailers[item.id];
 
     return (
       <TouchableOpacity
-        style={[
-          styles.movieCard,
-          trailerUrl && styles.movieCardWithTrailer, // 예고편 있는 카드만 붉은 테두리
-        ]}
+        style={[styles.movieCard, trailerUrl && styles.movieCardWithTrailer]}
         activeOpacity={0.9}
         onPress={() => openDetail(item)}
       >
@@ -658,8 +662,16 @@ function ResultsScreen({ route, navigation }) {
   );
 
   return (
-    <View style={styles.resultScreenWrapper}>
-      <SafeAreaView style={styles.resultScreenContainer}>
+    <View style={styles.screenRoot}>
+      <View
+        style={[
+          styles.resultScreenContainer,
+          {
+            paddingTop: insets.top + 16,
+            paddingBottom: insets.bottom + 16,
+          },
+        ]}
+      >
         {/* 헤더 */}
         <View style={styles.resultHeaderRow}>
           <View>
@@ -708,18 +720,14 @@ function ResultsScreen({ route, navigation }) {
 
         {/* 본문 리스트 */}
         {loading ? (
-          <View
-            style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
-          >
+          <View style={styles.loadingCenter}>
             <ActivityIndicator size="large" color="#FFFFFF" />
             <Text style={[styles.smallText, { marginTop: 8 }]}>
               추천 작품을 불러오는 중입니다...
             </Text>
           </View>
         ) : movies.length === 0 ? (
-          <View
-            style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
-          >
+          <View style={styles.loadingCenter}>
             <Text style={styles.smallText}>
               조건에 맞는 작품을 찾지 못했어요.
             </Text>
@@ -763,12 +771,7 @@ function ResultsScreen({ route, navigation }) {
                     source={{
                       uri: `${TMDB_IMAGE_BASE}${selectedMovie.poster_path}`,
                     }}
-                    style={{
-                      width: "100%",
-                      height: 220,
-                      borderRadius: 12,
-                      marginBottom: 12,
-                    }}
+                    style={styles.modalPoster}
                     resizeMode="cover"
                   />
                 )}
@@ -808,7 +811,7 @@ function ResultsScreen({ route, navigation }) {
             </View>
           </View>
         </Modal>
-      </SafeAreaView>
+      </View>
     </View>
   );
 }
@@ -818,10 +821,9 @@ function ResultsScreen({ route, navigation }) {
 // =========================
 const Stack = createNativeStackNavigator();
 
-export default function App() {
+function RootNavigator() {
   return (
     <NavigationContainer>
-      <StatusBar barStyle="light-content" />
       <Stack.Navigator
         screenOptions={{
           headerShown: false,
@@ -836,6 +838,15 @@ export default function App() {
   );
 }
 
+export default function App() {
+  return (
+    <SafeAreaProvider>
+      <StatusBar barStyle="light-content" backgroundColor="#050816" />
+      <RootNavigator />
+    </SafeAreaProvider>
+  );
+}
+
 // =========================
 // 스타일
 // =========================
@@ -844,11 +855,6 @@ const styles = StyleSheet.create({
   screenRoot: {
     flex: 1,
     backgroundColor: "#050816",
-  },
-  screenContainer: {
-    flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 20,
   },
   sectionTitle: {
     fontSize: 18,
@@ -862,14 +868,9 @@ const styles = StyleSheet.create({
   },
 
   // 1. MoodScreen
-  moodScreenWrapper: {
-    flex: 1,
-    backgroundColor: "#050816",
-  },
   moodScreenContainer: {
     flex: 1,
     paddingHorizontal: 20,
-    paddingTop: 20,
   },
   moodTopRow: {
     flexDirection: "row",
@@ -927,7 +928,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     marginTop: 24,
-    marginBottom: 10,
   },
   moodPrevButton: {
     paddingVertical: 10,
@@ -952,19 +952,14 @@ const styles = StyleSheet.create({
     color: "#020617",
   },
   moodHighlight: {
-    color: "#4ade80", // Tailwind green-400 느낌
+    color: "#4ade80",
     fontWeight: "600",
   },
 
   // 2. OTT 선택 화면
-  ottScreenWrapper: {
-    flex: 1,
-    backgroundColor: "#050816",
-  },
   ottScreenContainer: {
     flex: 1,
     paddingHorizontal: 20,
-    paddingTop: 20,
   },
   ottDescriptionText: {
     fontSize: 14,
@@ -972,7 +967,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   ottList: {
-    paddingBottom: 16,
+    paddingBottom: 40, // 네비게이션 바에 안 가리도록 여유
   },
   ottItemRow: {
     flexDirection: "row",
@@ -1001,14 +996,9 @@ const styles = StyleSheet.create({
   },
 
   // 3. 추천 결과 화면
-  resultScreenWrapper: {
-    flex: 1,
-    backgroundColor: "#050816",
-  },
   resultScreenContainer: {
     flex: 1,
     paddingHorizontal: 16,
-    paddingTop: 16,
   },
   resultHeaderRow: {
     flexDirection: "row",
@@ -1032,7 +1022,7 @@ const styles = StyleSheet.create({
     color: "#9CA3AF",
   },
   movieList: {
-    paddingBottom: 24,
+    paddingBottom: 40, // 리스트 끝이 네비게이션 바에 안 붙도록
   },
   movieCard: {
     flexDirection: "row",
@@ -1044,7 +1034,7 @@ const styles = StyleSheet.create({
   },
   movieCardWithTrailer: {
     borderWidth: 1,
-    borderColor: "#EF4444", // 살짝 밝은 레드 (tailwind red-500 느낌)
+    borderColor: "#EF4444",
   },
   moviePosterWrapper: {
     width: 90,
@@ -1096,7 +1086,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 999,
-    backgroundColor: "#FF0000", // 유튜브 레드
+    backgroundColor: "#FF0000",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1128,6 +1118,12 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontSize: 11,
     color: "#E5E7EB",
+  },
+
+  loadingCenter: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   // 모달
@@ -1178,6 +1174,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#9CA3AF",
     lineHeight: 18,
+  },
+  modalPoster: {
+    width: "100%",
+    height: 220,
+    borderRadius: 12,
+    marginBottom: 12,
   },
   modalTrailerButton: {
     marginTop: 12,
