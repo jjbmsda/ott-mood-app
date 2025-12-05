@@ -2,7 +2,7 @@
   "expo": {
     "name": "오늘 뭐 볼까",
     "slug": "ott-mood-app",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "splash": {
@@ -20,7 +20,7 @@
         "backgroundColor": "#3366FF"
       },
       "package": "com.oneul.moviemood",
-      "versionCode": 3
+      "versionCode": 4
     },
     "web": {
       "favicon": "./assets/favicon.png"
