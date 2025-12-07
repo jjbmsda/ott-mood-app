@@ -581,7 +581,7 @@ function ResultsScreen({ route, navigation }) {
     }
 
     try {
-      // 바로 링크 열기 시도
+      // 바로 링크 열기 시도.
       await Linking.openURL(url);
     } catch (e) {
       console.warn("Failed to open trailer url", e);
