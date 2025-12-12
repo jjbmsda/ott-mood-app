@@ -395,7 +395,7 @@ function MoodScreen({ navigation }) {
 }
 
 // =========================
-// 2. OTT 선택 화면
+// 2. OTT 선택 화면.
 // =========================
 function OttSelectScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
