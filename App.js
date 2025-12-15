@@ -22,12 +22,11 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 
+import { TMDB_API_KEY, TMDB_BASE_URL, TMDB_IMAGE_BASE } from "./config/tmdb";
+
 // =========================
 // TMDB / OTT / 설문 데이터
 // =========================
-const TMDB_API_KEY = "f276e46996150c5b6a693f773ad2cdee";
-const TMDB_BASE_URL = "https://api.themoviedb.org/3";
-const TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w500";
 
 const OTTS = [
   {
