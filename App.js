@@ -63,7 +63,8 @@ const STRINGS = {
     regionUS: "US",
     // ✅ 새 화면
     chooseTitle: "언어 / 지역 선택",
-    chooseDesc: "먼저 언어와 지역을 선택해 주세요.",
+    chooseDesc:
+      "먼저 언어와 지역을 선택해 주세요.\n(Please select your language and region first.)",
     start: "시작하기",
     autoDetect: "자동 설정",
     langKR: "한국어",
@@ -106,8 +107,7 @@ const STRINGS = {
     regionUS: "US",
     // ✅ 새 화면
     chooseTitle: "Choose language & region",
-    chooseDesc:
-      "Select language and region first.\n(You can test US/English even in Korea.)",
+    chooseDesc: "Please select your language and region first.",
     start: "Start",
     autoDetect: "Auto",
     langKR: "Korean",
@@ -1134,7 +1134,6 @@ function ResultsScreen({ route, navigation }) {
               onPress={() =>
                 navigation.navigate("Mood", { language, watchRegion })
               }
-              activeOpacity={0.7}
             >
               <Text style={styles.resultMoodResetText}>
                 {t(language, "moodReset")}
@@ -1150,11 +1149,24 @@ function ResultsScreen({ route, navigation }) {
                   watchRegion,
                 })
               }
-              activeOpacity={0.7}
             >
               <Text style={styles.resultMoodResetText}>
                 {t(language, "ottReset")}
               </Text>
+            </TouchableOpacity>
+
+            {/* 🌍 언어/지역 선택 */}
+            <TouchableOpacity
+              style={styles.languageButton}
+              onPress={() =>
+                navigation.navigate("LanguageRegion", {
+                  language,
+                  watchRegion,
+                })
+              }
+              activeOpacity={0.7}
+            >
+              <Text style={styles.languageButtonText}>🌍</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1396,6 +1408,18 @@ export default function App() {
 // 스타일
 // =========================
 const styles = StyleSheet.create({
+  languageButton: {
+    marginLeft: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 999,
+    backgroundColor: "#111827",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  languageButtonText: {
+    fontSize: 14,
+  },
   screenRoot: {
     flex: 1,
     backgroundColor: "#050816",
