@@ -11,7 +11,6 @@ import {
   ActivityIndicator,
   Linking,
   StatusBar,
-  Platform,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { NavigationContainer } from "@react-navigation/native";
@@ -23,7 +22,6 @@ import {
 } from "react-native-safe-area-context";
 
 import * as Localization from "expo-localization";
-
 import { TMDB_API_KEY, TMDB_BASE_URL, TMDB_IMAGE_BASE } from "./config/tmdb";
 
 // =========================
@@ -59,6 +57,10 @@ const STRINGS = {
     infoNA: "정보 없음",
     favoriteOn: "★ 즐겨찾기",
     favoriteOff: "☆ 즐겨찾기",
+    pickLang: "언어",
+    pickRegion: "지역",
+    regionKR: "KR",
+    regionUS: "US",
   },
   "en-US": {
     moodTopLabel: "Today's Mood",
@@ -89,6 +91,10 @@ const STRINGS = {
     infoNA: "N/A",
     favoriteOn: "★ Saved",
     favoriteOff: "☆ Save",
+    pickLang: "Language",
+    pickRegion: "Region",
+    regionKR: "KR",
+    regionUS: "US",
   },
 };
 
@@ -130,7 +136,6 @@ const OTTS_KR = [
   {
     id: "watcha",
     name: "왓챠",
-    // ⚠️ 예: Watcha providerId는 TMDB에서 지역별로 다를 수 있음 (필요하면 확인해서 수정)
     providerId: 97,
     watchRegion: "KR",
     logo: require("./assets/logos/watcha.png"),
@@ -145,8 +150,7 @@ const OTTS_KR = [
 ];
 
 // =========================
-// 설문(ko/en)
-// 내부 mood key는 그대로(행복해요/우울해요/설레요/신나요/아무거나)
+// 설문(ko/en) - 내부 mood key 고정
 // =========================
 const MOOD_QUESTIONS_KO = [
   {
@@ -244,7 +248,11 @@ const MOOD_QUESTIONS_EN = [
         text: "Something deep and emotional",
         weights: { 우울해요: 2, 설레요: 1 },
       },
-      { id: "q1_o3", text: "Thrilling and intense", weights: { 신나요: 3 } },
+      {
+        id: "q1_o3",
+        text: "Thrilling and intense",
+        weights: { 신나요: 3 },
+      },
       {
         id: "q1_o4",
         text: "Anything, I just want to watch",
@@ -303,7 +311,7 @@ const MOOD_GENRES = {
 };
 
 // =========================
-// TMDB 호출 헬퍼 (언어/지역 주입)
+// TMDB 호출 헬퍼
 // =========================
 const TMDB_LOGO_BASE = "https://image.tmdb.org/t/p/w92";
 
@@ -347,7 +355,6 @@ async function fetchBestTrailer(movieId, { language }) {
     let s = 0;
     const name = (v.name || "").toLowerCase();
     const type = (v.type || "").toLowerCase();
-
     if (v.site === "YouTube") s += 5;
     if (type.includes("trailer")) s += 5;
     if (type.includes("teaser")) s += 3;
@@ -357,9 +364,7 @@ async function fetchBestTrailer(movieId, { language }) {
     return s;
   };
 
-  const sorted = [...results].sort((a, b) => score(b) - score(a));
-  const best = sorted[0];
-
+  const best = [...results].sort((a, b) => score(b) - score(a))[0];
   if (!best || !best.key || best.site !== "YouTube") return null;
   return `https://www.youtube.com/watch?v=${best.key}`;
 }
@@ -374,11 +379,15 @@ async function fetchWatchProvidersMovie({ region, language }) {
 }
 
 // =========================
-// 1. 기분 설문 화면
+// 1. MoodScreen
 // =========================
 function MoodScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
-  const { language = "ko-KR" } = route.params || {};
+  const {
+    language = "ko-KR",
+    watchRegion = "KR",
+    setAppPrefs,
+  } = route.params || {};
 
   const MOOD_QUESTIONS = language.startsWith("en")
     ? MOOD_QUESTIONS_EN
@@ -455,7 +464,7 @@ function MoodScreen({ navigation, route }) {
         return;
       }
       const mood = calculateMood();
-      navigation.navigate("OttSelect", { mood, language });
+      navigation.navigate("OttSelect", { mood, language, watchRegion });
       return;
     }
 
@@ -469,6 +478,19 @@ function MoodScreen({ navigation, route }) {
     setError("");
   };
 
+  const setLanguageOverride = async (nextLang) => {
+    await setAppPrefs?.({ language: nextLang });
+    // navigation param 동기화 (현재 화면)
+    navigation.setParams({ language: nextLang });
+  };
+
+  const setRegionOverride = async (nextRegion) => {
+    // 지역 바꾸면 기본 언어도 같이 바꾸는 게 자연스러움
+    const nextLang = nextRegion === "US" ? "en-US" : "ko-KR";
+    await setAppPrefs?.({ watchRegion: nextRegion, language: nextLang });
+    navigation.setParams({ watchRegion: nextRegion, language: nextLang });
+  };
+
   return (
     <View style={styles.screenRoot}>
       <SafeAreaView
@@ -478,17 +500,78 @@ function MoodScreen({ navigation, route }) {
         ]}
         edges={["top", "bottom"]}
       >
+        {/* 상단 */}
         <View style={styles.moodTopRow}>
           <Text style={styles.moodTopLabel}>{t(language, "moodTopLabel")}</Text>
-          <Text style={styles.moodTopStep}>
-            {currentIndex + 1} / {totalQuestions}
-          </Text>
+
+          {/* 언어/지역 토글 */}
+          <View style={styles.topTogglesRow}>
+            <View style={styles.toggleGroup}>
+              <Text style={styles.toggleLabel}>{t(language, "pickLang")}</Text>
+              <TouchableOpacity
+                onPress={() => setLanguageOverride("ko-KR")}
+                style={[
+                  styles.langButton,
+                  language === "ko-KR" && styles.langButtonActive,
+                ]}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.langButtonText}>KR</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setLanguageOverride("en-US")}
+                style={[
+                  styles.langButton,
+                  language === "en-US" && styles.langButtonActive,
+                ]}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.langButtonText}>EN</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={[styles.toggleGroup, { marginLeft: 10 }]}>
+              <Text style={styles.toggleLabel}>
+                {t(language, "pickRegion")}
+              </Text>
+              <TouchableOpacity
+                onPress={() => setRegionOverride("KR")}
+                style={[
+                  styles.langButton,
+                  watchRegion === "KR" && styles.langButtonActive,
+                ]}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.langButtonText}>
+                  {t(language, "regionKR")}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setRegionOverride("US")}
+                style={[
+                  styles.langButton,
+                  watchRegion === "US" && styles.langButtonActive,
+                ]}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.langButtonText}>
+                  {t(language, "regionUS")}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.moodTopStep}>
+              {currentIndex + 1}/{totalQuestions}
+            </Text>
+          </View>
         </View>
 
+        {/* 질문 */}
         <View style={styles.moodQuestionBlock}>
           <Text style={styles.moodQuestionText}>{question.text}</Text>
         </View>
 
+        {/* 선택지 */}
         <View style={styles.moodOptionsBlock}>
           {question.options.map((opt) => {
             const isSelected = opt.id === selectedOptionId;
@@ -517,6 +600,7 @@ function MoodScreen({ navigation, route }) {
 
         {error ? <Text style={styles.moodErrorText}>{error}</Text> : null}
 
+        {/* 하단 네비 */}
         <View
           style={[
             styles.moodBottomRow,
@@ -552,7 +636,7 @@ function MoodScreen({ navigation, route }) {
 }
 
 // =========================
-// 2. OTT 선택 화면 (KR=로컬 / US=TMDB Provider)
+// 2. OTT 선택 화면
 // =========================
 function OttSelectScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
@@ -639,9 +723,7 @@ function OttSelectScreen({ navigation, route }) {
         </Text>
 
         {loadingOtts ? (
-          <View
-            style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
-          >
+          <View style={styles.centerFill}>
             <ActivityIndicator size="large" color="#FFFFFF" />
             <Text style={[styles.smallText, { marginTop: 8 }]}>Loading...</Text>
           </View>
@@ -759,7 +841,6 @@ function ResultsScreen({ route, navigation }) {
               const url = await fetchBestTrailer(m.id, { language });
               return [m.id, url];
             } catch (e) {
-              console.warn("Failed to fetch trailer", e);
               return [m.id, null];
             }
           })
@@ -817,7 +898,6 @@ function ResultsScreen({ route, navigation }) {
     }
 
     try {
-      // canOpenURL이 false라도 openURL이 되는 케이스가 있어 fallback 포함
       const supported = await Linking.canOpenURL(url);
       if (supported) {
         await Linking.openURL(url);
@@ -990,18 +1070,14 @@ function ResultsScreen({ route, navigation }) {
         )}
 
         {loading ? (
-          <View
-            style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
-          >
+          <View style={styles.centerFill}>
             <ActivityIndicator size="large" color="#FFFFFF" />
             <Text style={[styles.smallText, { marginTop: 8 }]}>
               {t(language, "loading")}
             </Text>
           </View>
         ) : movies.length === 0 ? (
-          <View
-            style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
-          >
+          <View style={styles.centerFill}>
             <Text style={styles.smallText}>{t(language, "notFound")}</Text>
           </View>
         ) : (
@@ -1103,15 +1179,7 @@ function ResultsScreen({ route, navigation }) {
 // =========================
 const Stack = createNativeStackNavigator();
 
-function RootNavigator() {
-  // 기기 지역/언어로 기본값 결정
-  const deviceRegion = Localization.region || "KR";
-  const primaryLocale = Localization.getLocales()?.[0]?.languageTag || "ko-KR";
-
-  const watchRegion = deviceRegion === "US" ? "US" : "KR";
-  const language =
-    primaryLocale.startsWith("en") || watchRegion === "US" ? "en-US" : "ko-KR";
-
+function RootNavigator({ language, watchRegion, setAppPrefs }) {
   return (
     <NavigationContainer>
       <StatusBar barStyle="light-content" backgroundColor="#050816" />
@@ -1124,7 +1192,7 @@ function RootNavigator() {
         <Stack.Screen
           name="Mood"
           component={MoodScreen}
-          initialParams={{ language, watchRegion }}
+          initialParams={{ language, watchRegion, setAppPrefs }}
         />
         <Stack.Screen
           name="OttSelect"
@@ -1142,9 +1210,74 @@ function RootNavigator() {
 }
 
 export default function App() {
+  const [language, setLanguage] = useState(null); // "ko-KR" | "en-US"
+  const [watchRegion, setWatchRegion] = useState(null); // "KR" | "US"
+
+  // 저장값 우선 → 없으면 기기 기반 기본값
+  useEffect(() => {
+    (async () => {
+      try {
+        const savedLang = await AsyncStorage.getItem("@language");
+        const savedRegion = await AsyncStorage.getItem("@watchRegion");
+
+        if (savedLang && (savedLang === "ko-KR" || savedLang === "en-US")) {
+          setLanguage(savedLang);
+        }
+
+        if (savedRegion && (savedRegion === "KR" || savedRegion === "US")) {
+          setWatchRegion(savedRegion);
+        }
+
+        // 기본값 계산(저장값 없을 때만)
+        const deviceRegion = Localization.region || "KR";
+        const primaryLocale =
+          Localization.getLocales()?.[0]?.languageTag || "ko-KR";
+
+        const defaultRegion =
+          savedRegion && (savedRegion === "KR" || savedRegion === "US")
+            ? savedRegion
+            : deviceRegion === "US"
+            ? "US"
+            : "KR";
+
+        const defaultLang =
+          savedLang && (savedLang === "ko-KR" || savedLang === "en-US")
+            ? savedLang
+            : primaryLocale.startsWith("en") || defaultRegion === "US"
+            ? "en-US"
+            : "ko-KR";
+
+        setWatchRegion((prev) => prev ?? defaultRegion);
+        setLanguage((prev) => prev ?? defaultLang);
+      } catch (e) {
+        // 최악의 경우 fallback
+        setWatchRegion("KR");
+        setLanguage("ko-KR");
+      }
+    })();
+  }, []);
+
+  const setAppPrefs = async (patch) => {
+    // patch: { language?: "ko-KR"|"en-US", watchRegion?: "KR"|"US" }
+    if (patch.language) {
+      setLanguage(patch.language);
+      await AsyncStorage.setItem("@language", patch.language);
+    }
+    if (patch.watchRegion) {
+      setWatchRegion(patch.watchRegion);
+      await AsyncStorage.setItem("@watchRegion", patch.watchRegion);
+    }
+  };
+
+  if (!language || !watchRegion) return null;
+
   return (
     <SafeAreaProvider>
-      <RootNavigator />
+      <RootNavigator
+        language={language}
+        watchRegion={watchRegion}
+        setAppPrefs={setAppPrefs}
+      />
     </SafeAreaProvider>
   );
 }
@@ -1168,6 +1301,42 @@ const styles = StyleSheet.create({
     color: "#9CA3AF",
   },
 
+  centerFill: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  // top toggle UI
+  topTogglesRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  toggleGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  toggleLabel: {
+    fontSize: 11,
+    color: "#6B7280",
+    marginRight: 6,
+  },
+  langButton: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 999,
+    backgroundColor: "#111827",
+    marginLeft: 6,
+  },
+  langButtonActive: {
+    backgroundColor: "#2563EB",
+  },
+  langButtonText: {
+    fontSize: 12,
+    color: "#F9FAFB",
+    fontWeight: "600",
+  },
+
   // 1. MoodScreen
   moodScreenContainer: {
     flex: 1,
@@ -1177,15 +1346,16 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 32,
+    marginBottom: 24,
   },
   moodTopLabel: {
     fontSize: 13,
     color: "#9CA3AF",
   },
   moodTopStep: {
-    fontSize: 13,
+    fontSize: 12,
     color: "#6B7280",
+    marginLeft: 10,
   },
   moodQuestionBlock: {
     marginBottom: 32,
@@ -1257,7 +1427,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  // 2. OTT 선택 화면
+  // 2. OTT 선택
   ottScreenContainer: {
     flex: 1,
     paddingHorizontal: 20,
@@ -1296,7 +1466,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#111827",
   },
 
-  // 3. 추천 결과 화면
+  // 3. Results
   resultScreenContainer: {
     flex: 1,
     paddingHorizontal: 16,
@@ -1394,6 +1564,7 @@ const styles = StyleSheet.create({
     color: "#F9FAFB",
   },
 
+  // favorites
   favoritesSection: {
     marginTop: 16,
     marginBottom: 8,
@@ -1417,7 +1588,7 @@ const styles = StyleSheet.create({
     color: "#E5E7EB",
   },
 
-  // 모달
+  // modal
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.7)",
