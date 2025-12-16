@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -752,6 +752,22 @@ function OttSelectScreen({ navigation, route }) {
   const [ottList, setOttList] = useState([]);
   const [loadingOtts, setLoadingOtts] = useState(true);
 
+  // ✅ US에서 노출할 OTT provider_id 기준 (중복/표기 차이 방지)
+  const WANT_US_PROVIDER_IDS = useMemo(
+    () =>
+      new Set([
+        8, // Netflix
+        337, // Disney Plus
+        15, // Hulu
+        9, // Amazon Prime Video
+        1899, // Max (HBO)
+        350, // Apple TV+
+        531, // Paramount Plus
+        386, // Peacock
+      ]),
+    []
+  );
+
   useEffect(() => {
     let cancelled = false;
 
@@ -759,41 +775,39 @@ function OttSelectScreen({ navigation, route }) {
       try {
         setLoadingOtts(true);
 
+        // 🇰🇷 한국이면 로컬 고정 OTT 사용
         if (watchRegion !== "US") {
           if (!cancelled) setOttList(OTTS_KR);
           return;
         }
 
+        // 🇺🇸 미국이면 TMDB provider API 사용
         const providers = await fetchWatchProvidersMovie({
           region: "US",
           language,
         });
 
-        const pickNames = new Set([
-          "Netflix",
-          "Disney Plus",
-          "Hulu",
-          "Amazon Prime Video",
-          "Max",
-          "Apple TV Plus",
-          "Paramount Plus",
-          "Peacock",
-        ]);
-
         const picked = providers
-          .filter((p) => pickNames.has(p.provider_name))
+          .filter((p) => WANT_US_PROVIDER_IDS.has(p.provider_id))
           .map((p) => ({
             id: String(p.provider_id),
             name: p.provider_name,
             providerId: p.provider_id,
             watchRegion: "US",
             logoUrl: p.logo_path ? `${TMDB_LOGO_BASE}${p.logo_path}` : null,
-          }));
+          }))
+          // ✅ 혹시 모를 중복 방지 (provider_id 기준)
+          .reduce((acc, cur) => {
+            if (!acc.find((x) => x.providerId === cur.providerId)) {
+              acc.push(cur);
+            }
+            return acc;
+          }, []);
 
         if (!cancelled) setOttList(picked);
       } catch (e) {
         console.warn("Failed to load OTT providers", e);
-        if (!cancelled) setOttList(watchRegion === "US" ? [] : OTTS_KR);
+        if (!cancelled) setOttList([]);
       } finally {
         if (!cancelled) setLoadingOtts(false);
       }
@@ -802,7 +816,7 @@ function OttSelectScreen({ navigation, route }) {
     return () => {
       cancelled = true;
     };
-  }, [watchRegion, language]);
+  }, [watchRegion, language, WANT_US_PROVIDER_IDS]);
 
   const handleSelectOtt = (ott) => {
     setSelectedOttId(ott.id);
@@ -819,7 +833,10 @@ function OttSelectScreen({ navigation, route }) {
       <SafeAreaView
         style={[
           styles.ottScreenContainer,
-          { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 16 },
+          {
+            paddingTop: insets.top + 20,
+            paddingBottom: insets.bottom + 16,
+          },
         ]}
         edges={["top", "bottom"]}
       >
@@ -831,7 +848,7 @@ function OttSelectScreen({ navigation, route }) {
         {loadingOtts ? (
           <View style={styles.centerFill}>
             <ActivityIndicator size="large" color="#FFFFFF" />
-            <Text style={[styles.smallText, { marginTop: 8 }]}>Loading...</Text>
+            <Text style={[styles.smallText, { marginTop: 8 }]}>Loading…</Text>
           </View>
         ) : (
           <FlatList
