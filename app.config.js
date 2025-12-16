@@ -2,6 +2,7 @@ export default {
   expo: {
     name: "OTT Mood",
     slug: "ott-mood-app",
+    plugins: ["expo-localization"],
 
     android: {
       package: "com.oneul.moviemood",

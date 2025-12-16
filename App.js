@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -22,13 +22,90 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 
+import * as Localization from "expo-localization";
+
 import { TMDB_API_KEY, TMDB_BASE_URL, TMDB_IMAGE_BASE } from "./config/tmdb";
 
 // =========================
-// TMDB / OTT / 설문 데이터
+// 지역/언어 감지 + 문자열
 // =========================
+const STRINGS = {
+  "ko-KR": {
+    moodTopLabel: "오늘의 기분",
+    next: "다음",
+    prev: "이전",
+    viewResult: "결과 보기",
+    whereToWatch: "어디에서 볼까요?",
+    whereToWatchDesc:
+      "지금 가입해 둔 OTT를 선택하면,\n그 안에서 볼 수 있는 작품만 골라 드릴게요.",
+    resultsTitleSuffix: "에서 볼 수 있는 작품",
+    recommendLinePrefix: "",
+    recommendLineSuffix: " 기분에 맞는 작품을 추천했어요.",
+    moodReset: "기분 다시선택",
+    ottReset: "OTT 다시선택",
+    favoritesTitle: "내가 저장한 작품",
+    loading: "추천 작품을 불러오는 중입니다...",
+    notFound: "조건에 맞는 작품을 찾지 못했어요.",
+    noOverview: "줄거리 정보가 없습니다.",
+    yearNA: "연도 정보 없음",
+    trailerNotFound: "예고편을 찾지 못했어요.",
+    trailerOpenFail: "예고편 링크를 여는 중 문제가 발생했어요.",
+    youtubeTrailer: "▶ YouTube 예고편",
+    close: "닫기",
+    baseInfo: "기본 정보",
+    releaseDate: "개봉일",
+    rating: "평점",
+    overview: "줄거리",
+    infoNA: "정보 없음",
+    favoriteOn: "★ 즐겨찾기",
+    favoriteOff: "☆ 즐겨찾기",
+  },
+  "en-US": {
+    moodTopLabel: "Today's Mood",
+    next: "Next",
+    prev: "Back",
+    viewResult: "See results",
+    whereToWatch: "Where will you watch?",
+    whereToWatchDesc:
+      "Pick a streaming service you use,\nthen I'll recommend titles available there.",
+    resultsTitleSuffix: " titles available",
+    recommendLinePrefix: 'Recommended for a "',
+    recommendLineSuffix: '" mood.',
+    moodReset: "Change mood",
+    ottReset: "Change OTT",
+    favoritesTitle: "Saved titles",
+    loading: "Loading recommendations...",
+    notFound: "No titles found for these filters.",
+    noOverview: "No overview available.",
+    yearNA: "Year N/A",
+    trailerNotFound: "No trailer found.",
+    trailerOpenFail: "Could not open the trailer link.",
+    youtubeTrailer: "▶ YouTube Trailer",
+    close: "Close",
+    baseInfo: "Info",
+    releaseDate: "Release date",
+    rating: "Rating",
+    overview: "Overview",
+    infoNA: "N/A",
+    favoriteOn: "★ Saved",
+    favoriteOff: "☆ Save",
+  },
+};
 
-const OTTS = [
+const MOOD_LABELS = {
+  행복해요: { "ko-KR": "행복해요", "en-US": "Happy" },
+  우울해요: { "ko-KR": "우울해요", "en-US": "Blue" },
+  설레요: { "ko-KR": "설레요", "en-US": "Excited" },
+  신나요: { "ko-KR": "신나요", "en-US": "Hyped" },
+  아무거나: { "ko-KR": "아무거나", "en-US": "Anything" },
+};
+
+const t = (lang, key) => STRINGS[lang]?.[key] ?? STRINGS["en-US"][key] ?? key;
+
+// =========================
+// KR 고정 OTT(로컬 로고)
+// =========================
+const OTTS_KR = [
   {
     id: "netflix",
     name: "넷플릭스",
@@ -53,6 +130,7 @@ const OTTS = [
   {
     id: "watcha",
     name: "왓챠",
+    // ⚠️ 예: Watcha providerId는 TMDB에서 지역별로 다를 수 있음 (필요하면 확인해서 수정)
     providerId: 97,
     watchRegion: "KR",
     logo: require("./assets/logos/watcha.png"),
@@ -66,7 +144,11 @@ const OTTS = [
   },
 ];
 
-const MOOD_QUESTIONS = [
+// =========================
+// 설문(ko/en)
+// 내부 mood key는 그대로(행복해요/우울해요/설레요/신나요/아무거나)
+// =========================
+const MOOD_QUESTIONS_KO = [
   {
     id: "q1",
     text: "지금 영화 볼 때, 어떤 느낌이 가장 끌려요?",
@@ -147,31 +229,96 @@ const MOOD_QUESTIONS = [
   },
 ];
 
+const MOOD_QUESTIONS_EN = [
+  {
+    id: "q1",
+    text: "What kind of movie do you want right now?",
+    options: [
+      {
+        id: "q1_o1",
+        text: "Something light and funny",
+        weights: { 행복해요: 3, 신나요: 1 },
+      },
+      {
+        id: "q1_o2",
+        text: "Something deep and emotional",
+        weights: { 우울해요: 2, 설레요: 1 },
+      },
+      { id: "q1_o3", text: "Thrilling and intense", weights: { 신나요: 3 } },
+      {
+        id: "q1_o4",
+        text: "Anything, I just want to watch",
+        weights: { 아무거나: 2 },
+      },
+    ],
+  },
+  {
+    id: "q2",
+    text: "How was your day overall?",
+    options: [
+      {
+        id: "q2_o1",
+        text: "Pretty good — things went well",
+        weights: { 행복해요: 3 },
+      },
+      { id: "q2_o2", text: "I feel tired or down", weights: { 우울해요: 3 } },
+      {
+        id: "q2_o3",
+        text: "I feel excited about something",
+        weights: { 설레요: 3 },
+      },
+      { id: "q2_o4", text: "Just an ordinary day", weights: { 아무거나: 2 } },
+    ],
+  },
+  {
+    id: "q3",
+    text: "Who are you watching with?",
+    options: [
+      {
+        id: "q3_o1",
+        text: "Friends — laugh together",
+        weights: { 행복해요: 2, 신나요: 1 },
+      },
+      {
+        id: "q3_o2",
+        text: "Someone to talk deeply with",
+        weights: { 우울해요: 2 },
+      },
+      { id: "q3_o3", text: "A date / romantic vibe", weights: { 설레요: 3 } },
+      {
+        id: "q3_o4",
+        text: "Anyone — fun is what matters",
+        weights: { 아무거나: 2 },
+      },
+    ],
+  },
+];
+
 const MOOD_GENRES = {
-  행복해요: [35, 10751], // 코미디, 가족
-  우울해요: [18], // 드라마
-  설레요: [10749], // 로맨스
-  신나요: [28, 12], // 액션, 어드벤처
-  아무거나: [], // 장르 필터 없음
+  행복해요: [35, 10751],
+  우울해요: [18],
+  설레요: [10749],
+  신나요: [28, 12],
+  아무거나: [],
 };
 
 // =========================
-// TMDB 호출 헬퍼
+// TMDB 호출 헬퍼 (언어/지역 주입)
 // =========================
-async function fetchOttMovies(ott, mood) {
+const TMDB_LOGO_BASE = "https://image.tmdb.org/t/p/w92";
+
+async function fetchOttMovies(ott, mood, { language }) {
   const genres = MOOD_GENRES[mood] || [];
   const params = [
     `api_key=${TMDB_API_KEY}`,
-    "language=ko-KR",
+    `language=${encodeURIComponent(language)}`,
     "sort_by=popularity.desc",
     `with_watch_providers=${ott.providerId}`,
     `watch_region=${ott.watchRegion || "KR"}`,
     "include_adult=false",
     "page=1",
   ];
-  if (genres.length > 0) {
-    params.push(`with_genres=${genres.join(",")}`);
-  }
+  if (genres.length > 0) params.push(`with_genres=${genres.join(",")}`);
 
   const url = `${TMDB_BASE_URL}/discover/movie?${params.join("&")}`;
   const res = await fetch(url);
@@ -179,18 +326,21 @@ async function fetchOttMovies(ott, mood) {
   return json.results || [];
 }
 
-async function fetchMovieDetail(movieId) {
-  const url = `${TMDB_BASE_URL}/movie/${movieId}?api_key=${TMDB_API_KEY}&language=ko-KR`;
+async function fetchMovieDetail(movieId, { language }) {
+  const url = `${TMDB_BASE_URL}/movie/${movieId}?api_key=${TMDB_API_KEY}&language=${encodeURIComponent(
+    language
+  )}`;
   const res = await fetch(url);
   return await res.json();
 }
 
-async function fetchBestTrailer(movieId) {
-  const url = `${TMDB_BASE_URL}/movie/${movieId}/videos?api_key=${TMDB_API_KEY}&language=ko-KR`;
+async function fetchBestTrailer(movieId, { language }) {
+  const url = `${TMDB_BASE_URL}/movie/${movieId}/videos?api_key=${TMDB_API_KEY}&language=${encodeURIComponent(
+    language
+  )}`;
   const res = await fetch(url);
   const json = await res.json();
   const results = json.results || [];
-
   if (!results.length) return null;
 
   const score = (v) => {
@@ -201,8 +351,8 @@ async function fetchBestTrailer(movieId) {
     if (v.site === "YouTube") s += 5;
     if (type.includes("trailer")) s += 5;
     if (type.includes("teaser")) s += 3;
-    if (name.includes("공식") || name.includes("official")) s += 2;
-    if (name.includes("티저") || name.includes("teaser")) s += 1;
+    if (name.includes("official") || name.includes("공식")) s += 2;
+    if (name.includes("teaser") || name.includes("티저")) s += 1;
     if (name.includes("trailer")) s += 1;
     return s;
   };
@@ -214,11 +364,26 @@ async function fetchBestTrailer(movieId) {
   return `https://www.youtube.com/watch?v=${best.key}`;
 }
 
+async function fetchWatchProvidersMovie({ region, language }) {
+  const url = `${TMDB_BASE_URL}/watch/providers/movie?api_key=${TMDB_API_KEY}&watch_region=${encodeURIComponent(
+    region
+  )}&language=${encodeURIComponent(language)}`;
+  const res = await fetch(url);
+  const json = await res.json();
+  return json.results || [];
+}
+
 // =========================
 // 1. 기분 설문 화면
 // =========================
-function MoodScreen({ navigation }) {
+function MoodScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
+  const { language = "ko-KR" } = route.params || {};
+
+  const MOOD_QUESTIONS = language.startsWith("en")
+    ? MOOD_QUESTIONS_EN
+    : MOOD_QUESTIONS_KO;
+
   const [answers, setAnswers] = useState({});
   const [currentIndex, setCurrentIndex] = useState(0);
   const [error, setError] = useState("");
@@ -228,10 +393,7 @@ function MoodScreen({ navigation }) {
   const selectedOptionId = answers[question.id];
 
   const handleSelectOption = (questionId, optionId) => {
-    setAnswers((prev) => ({
-      ...prev,
-      [questionId]: optionId,
-    }));
+    setAnswers((prev) => ({ ...prev, [questionId]: optionId }));
     setError("");
   };
 
@@ -249,18 +411,14 @@ function MoodScreen({ navigation }) {
     MOOD_QUESTIONS.forEach((q) => {
       const selectedId = answers[q.id];
       const option = q.options.find((opt) => opt.id === selectedId);
-      if (!option || !option.weights) return;
-
+      if (!option?.weights) return;
       Object.entries(option.weights).forEach(([moodKey, weight]) => {
-        if (scores[moodKey] != null) {
-          scores[moodKey] += weight;
-        }
+        if (scores[moodKey] != null) scores[moodKey] += weight;
       });
     });
 
     let bestMood = "아무거나";
     let bestScore = -Infinity;
-
     Object.entries(scores).forEach(([moodKey, score]) => {
       if (
         score > bestScore ||
@@ -273,25 +431,31 @@ function MoodScreen({ navigation }) {
       }
     });
 
-    if (bestScore <= 0) {
-      bestMood = "아무거나";
-    }
+    if (bestScore <= 0) bestMood = "아무거나";
     return bestMood;
   };
 
   const handleNext = () => {
     if (!selectedOptionId) {
-      setError("현재 질문에 대한 답을 선택해 주세요.");
+      setError(
+        language.startsWith("en")
+          ? "Please select an answer."
+          : "현재 질문에 대한 답을 선택해 주세요."
+      );
       return;
     }
 
     if (currentIndex === totalQuestions - 1) {
       if (!allAnswered) {
-        setError("모든 질문에 답해 주세요.");
+        setError(
+          language.startsWith("en")
+            ? "Please answer all questions."
+            : "모든 질문에 답해 주세요."
+        );
         return;
       }
       const mood = calculateMood();
-      navigation.navigate("OttSelect", { mood });
+      navigation.navigate("OttSelect", { mood, language });
       return;
     }
 
@@ -310,27 +474,21 @@ function MoodScreen({ navigation }) {
       <SafeAreaView
         style={[
           styles.moodScreenContainer,
-          {
-            paddingTop: insets.top + 20,
-            paddingBottom: insets.bottom + 16,
-          },
+          { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 16 },
         ]}
         edges={["top", "bottom"]}
       >
-        {/* 상단 */}
         <View style={styles.moodTopRow}>
-          <Text style={styles.moodTopLabel}>오늘의 기분</Text>
+          <Text style={styles.moodTopLabel}>{t(language, "moodTopLabel")}</Text>
           <Text style={styles.moodTopStep}>
             {currentIndex + 1} / {totalQuestions}
           </Text>
         </View>
 
-        {/* 질문 */}
         <View style={styles.moodQuestionBlock}>
           <Text style={styles.moodQuestionText}>{question.text}</Text>
         </View>
 
-        {/* 선택지 */}
         <View style={styles.moodOptionsBlock}>
           {question.options.map((opt) => {
             const isSelected = opt.id === selectedOptionId;
@@ -357,10 +515,8 @@ function MoodScreen({ navigation }) {
           })}
         </View>
 
-        {/* 에러 */}
         {error ? <Text style={styles.moodErrorText}>{error}</Text> : null}
 
-        {/* 하단 네비 */}
         <View
           style={[
             styles.moodBottomRow,
@@ -375,7 +531,7 @@ function MoodScreen({ navigation }) {
             disabled={currentIndex === 0}
             onPress={handlePrev}
           >
-            <Text style={styles.moodPrevText}>이전</Text>
+            <Text style={styles.moodPrevText}>{t(language, "prev")}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -384,7 +540,9 @@ function MoodScreen({ navigation }) {
             activeOpacity={0.85}
           >
             <Text style={styles.moodNextText}>
-              {currentIndex === totalQuestions - 1 ? "결과 보기" : "다음"}
+              {currentIndex === totalQuestions - 1
+                ? t(language, "viewResult")
+                : t(language, "next")}
             </Text>
           </TouchableOpacity>
         </View>
@@ -394,18 +552,75 @@ function MoodScreen({ navigation }) {
 }
 
 // =========================
-// 2. OTT 선택 화면.
+// 2. OTT 선택 화면 (KR=로컬 / US=TMDB Provider)
 // =========================
 function OttSelectScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
-  const { mood } = route.params || {};
+  const { mood, language = "ko-KR", watchRegion = "KR" } = route.params || {};
+
   const [selectedOttId, setSelectedOttId] = useState(null);
+  const [ottList, setOttList] = useState([]);
+  const [loadingOtts, setLoadingOtts] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        setLoadingOtts(true);
+
+        if (watchRegion !== "US") {
+          if (!cancelled) setOttList(OTTS_KR);
+          return;
+        }
+
+        const providers = await fetchWatchProvidersMovie({
+          region: "US",
+          language,
+        });
+
+        const pickNames = new Set([
+          "Netflix",
+          "Disney Plus",
+          "Hulu",
+          "Amazon Prime Video",
+          "Max",
+          "Apple TV Plus",
+          "Paramount Plus",
+          "Peacock",
+        ]);
+
+        const picked = providers
+          .filter((p) => pickNames.has(p.provider_name))
+          .map((p) => ({
+            id: String(p.provider_id),
+            name: p.provider_name,
+            providerId: p.provider_id,
+            watchRegion: "US",
+            logoUrl: p.logo_path ? `${TMDB_LOGO_BASE}${p.logo_path}` : null,
+          }));
+
+        if (!cancelled) setOttList(picked);
+      } catch (e) {
+        console.warn("Failed to load OTT providers", e);
+        if (!cancelled) setOttList(watchRegion === "US" ? [] : OTTS_KR);
+      } finally {
+        if (!cancelled) setLoadingOtts(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [watchRegion, language]);
 
   const handleSelectOtt = (ott) => {
     setSelectedOttId(ott.id);
     navigation.navigate("Results", {
       mood: mood || "아무거나",
       ott,
+      language,
+      watchRegion: ott.watchRegion || watchRegion,
     });
   };
 
@@ -414,45 +629,65 @@ function OttSelectScreen({ navigation, route }) {
       <SafeAreaView
         style={[
           styles.ottScreenContainer,
-          {
-            paddingTop: insets.top + 20,
-            paddingBottom: insets.bottom + 16,
-          },
+          { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 16 },
         ]}
         edges={["top", "bottom"]}
       >
-        <Text style={styles.sectionTitle}>어디에서 볼까요?</Text>
+        <Text style={styles.sectionTitle}>{t(language, "whereToWatch")}</Text>
         <Text style={styles.ottDescriptionText}>
-          지금 가입해 둔 OTT를 선택하면,{"\n"}그 안에서 볼 수 있는 작품만 골라
-          드릴게요.
+          {t(language, "whereToWatchDesc")}
         </Text>
 
-        <FlatList
-          data={OTTS}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={[
-            styles.ottList,
-            { paddingBottom: insets.bottom + 24 },
-          ]}
-          renderItem={({ item }) => {
-            const isSelected = selectedOttId === item.id;
-            return (
-              <TouchableOpacity
-                style={[
-                  styles.ottItemRow,
-                  isSelected && styles.ottItemSelected,
-                ]}
-                onPress={() => handleSelectOtt(item)}
-                activeOpacity={0.9}
-              >
-                {item.logo && (
-                  <Image source={item.logo} style={styles.ottLogoImage} />
-                )}
-                <Text style={styles.ottNameText}>{item.name}</Text>
-              </TouchableOpacity>
-            );
-          }}
-        />
+        {loadingOtts ? (
+          <View
+            style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
+          >
+            <ActivityIndicator size="large" color="#FFFFFF" />
+            <Text style={[styles.smallText, { marginTop: 8 }]}>Loading...</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={ottList}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={[
+              styles.ottList,
+              { paddingBottom: insets.bottom + 24 },
+            ]}
+            renderItem={({ item }) => {
+              const isSelected = selectedOttId === item.id;
+              return (
+                <TouchableOpacity
+                  style={[
+                    styles.ottItemRow,
+                    isSelected && styles.ottItemSelected,
+                  ]}
+                  onPress={() => handleSelectOtt(item)}
+                  activeOpacity={0.9}
+                >
+                  {item.logo ? (
+                    <Image source={item.logo} style={styles.ottLogoImage} />
+                  ) : item.logoUrl ? (
+                    <Image
+                      source={{ uri: item.logoUrl }}
+                      style={styles.ottLogoImage}
+                    />
+                  ) : null}
+
+                  <Text style={styles.ottNameText}>{item.name}</Text>
+                </TouchableOpacity>
+              );
+            }}
+            ListEmptyComponent={() => (
+              <View style={{ paddingTop: 24 }}>
+                <Text style={styles.smallText}>
+                  {language.startsWith("en")
+                    ? "No OTT providers found."
+                    : "OTT 목록을 불러오지 못했어요."}
+                </Text>
+              </View>
+            )}
+          />
+        )}
       </SafeAreaView>
     </View>
   );
@@ -463,49 +698,57 @@ function OttSelectScreen({ navigation, route }) {
 // =========================
 function ResultsScreen({ route, navigation }) {
   const insets = useSafeAreaInsets();
-  const { mood = "아무거나", ott } = route.params || {};
+  const {
+    mood = "아무거나",
+    ott,
+    language = "ko-KR",
+    watchRegion = "KR",
+  } = route.params || {};
+
   const [movies, setMovies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [favorites, setFavorites] = useState([]);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [selectedMovie, setSelectedMovie] = useState(null);
   const [selectedMovieDetail, setSelectedMovieDetail] = useState(null);
-  const [trailers, setTrailers] = useState({}); // { [movieId]: url or null }
+  const [trailers, setTrailers] = useState({});
 
-  // 즐겨찾기 로드
+  const moodLabel =
+    MOOD_LABELS[mood]?.[language.startsWith("en") ? "en-US" : "ko-KR"] || mood;
+
   useEffect(() => {
     (async () => {
       try {
         const raw = await AsyncStorage.getItem("@favorites");
-        if (raw) {
-          setFavorites(JSON.parse(raw));
-        }
+        if (raw) setFavorites(JSON.parse(raw));
       } catch (e) {
         console.warn("Failed to load favorites", e);
       }
     })();
   }, []);
 
-  // 영화 로드
   useEffect(() => {
     if (!ott) return;
     setLoading(true);
     (async () => {
       try {
-        const data = await fetchOttMovies(ott, mood);
+        const data = await fetchOttMovies(
+          { ...ott, watchRegion: ott.watchRegion || watchRegion },
+          mood,
+          { language }
+        );
         setMovies(data);
       } catch (e) {
         console.warn("Failed to fetch movies", e);
+        setMovies([]);
       } finally {
         setLoading(false);
       }
     })();
-  }, [ott, mood]);
+  }, [ott, mood, language, watchRegion]);
 
-  // 예고편 미리 조회
   useEffect(() => {
-    if (!movies || movies.length === 0) return;
-
+    if (!movies?.length) return;
     let isCancelled = false;
 
     (async () => {
@@ -513,7 +756,7 @@ function ResultsScreen({ route, navigation }) {
         const entries = await Promise.all(
           movies.map(async (m) => {
             try {
-              const url = await fetchBestTrailer(m.id);
+              const url = await fetchBestTrailer(m.id, { language });
               return [m.id, url];
             } catch (e) {
               console.warn("Failed to fetch trailer", e);
@@ -521,9 +764,7 @@ function ResultsScreen({ route, navigation }) {
             }
           })
         );
-        if (!isCancelled) {
-          setTrailers(Object.fromEntries(entries));
-        }
+        if (!isCancelled) setTrailers(Object.fromEntries(entries));
       } catch (e) {
         console.warn("Trailer prefetch error", e);
       }
@@ -532,7 +773,7 @@ function ResultsScreen({ route, navigation }) {
     return () => {
       isCancelled = true;
     };
-  }, [movies]);
+  }, [movies, language]);
 
   const saveFavorites = async (next) => {
     try {
@@ -545,12 +786,9 @@ function ResultsScreen({ route, navigation }) {
 
   const toggleFavorite = (movie) => {
     const exists = favorites.some((f) => f.id === movie.id);
-    let next;
-    if (exists) {
-      next = favorites.filter((f) => f.id !== movie.id);
-    } else {
-      next = [...favorites, movie];
-    }
+    const next = exists
+      ? favorites.filter((f) => f.id !== movie.id)
+      : [...favorites, movie];
     saveFavorites(next);
   };
 
@@ -558,7 +796,7 @@ function ResultsScreen({ route, navigation }) {
     setSelectedMovie(movie);
     setDetailModalVisible(true);
     try {
-      const detail = await fetchMovieDetail(movie.id);
+      const detail = await fetchMovieDetail(movie.id, { language });
       setSelectedMovieDetail(detail);
     } catch (e) {
       console.warn("Failed to fetch detail", e);
@@ -573,18 +811,22 @@ function ResultsScreen({ route, navigation }) {
 
   const openTrailer = async (movieId) => {
     const url = trailers[movieId];
-
     if (!url) {
-      alert("예고편을 찾지 못했어요.");
+      alert(t(language, "trailerNotFound"));
       return;
     }
 
     try {
-      // 바로 링크 열기 시도.
+      // canOpenURL이 false라도 openURL이 되는 케이스가 있어 fallback 포함
+      const supported = await Linking.canOpenURL(url);
+      if (supported) {
+        await Linking.openURL(url);
+        return;
+      }
       await Linking.openURL(url);
     } catch (e) {
       console.warn("Failed to open trailer url", e);
-      alert("예고편 링크를 여는 중 문제가 발생했어요.");
+      alert(t(language, "trailerOpenFail"));
     }
   };
 
@@ -598,7 +840,6 @@ function ResultsScreen({ route, navigation }) {
         activeOpacity={0.9}
         onPress={() => openDetail(item)}
       >
-        {/* 포스터 영역 */}
         <View style={styles.moviePosterWrapper}>
           {item.poster_path ? (
             <Image
@@ -608,7 +849,6 @@ function ResultsScreen({ route, navigation }) {
           ) : null}
         </View>
 
-        {/* 정보 영역 */}
         <View style={styles.movieInfoArea}>
           <View>
             <Text style={styles.movieTitle} numberOfLines={2}>
@@ -616,10 +856,10 @@ function ResultsScreen({ route, navigation }) {
             </Text>
             <Text style={styles.movieMetaText}>
               ⭐ {item.vote_average?.toFixed(1) || "N/A"} ·{" "}
-              {item.release_date?.slice(0, 4) || "연도 정보 없음"}
+              {item.release_date?.slice(0, 4) || t(language, "yearNA")}
             </Text>
             <Text style={styles.movieOverviewText} numberOfLines={3}>
-              {item.overview || "줄거리 정보가 없습니다."}
+              {item.overview || t(language, "noOverview")}
             </Text>
           </View>
 
@@ -629,24 +869,24 @@ function ResultsScreen({ route, navigation }) {
               onPress={() => toggleFavorite(item)}
             >
               <Text style={styles.favoriteButtonText}>
-                {isFav ? "★ 즐겨찾기" : "☆ 즐겨찾기"}
+                {isFav ? t(language, "favoriteOn") : t(language, "favoriteOff")}
               </Text>
             </TouchableOpacity>
 
-            {/* 예고편 있는 경우에만 유튜브 버튼 표시 */}
             {trailerUrl && (
               <TouchableOpacity
                 style={styles.trailerButton}
                 onPress={() => openTrailer(item.id)}
                 activeOpacity={0.85}
               >
-                <Text style={styles.trailerButtonText}>▶ YouTube 예고편</Text>
+                <Text style={styles.trailerButtonText}>
+                  {t(language, "youtubeTrailer")}
+                </Text>
               </TouchableOpacity>
             )}
           </View>
         </View>
 
-        {/* 카드 오른쪽 위 유튜브 배지 (예고편 있을 때만) */}
         {trailerUrl && (
           <View style={styles.youtubeBadge}>
             <Text style={styles.youtubeBadgeText}>▶</Text>
@@ -678,23 +918,30 @@ function ResultsScreen({ route, navigation }) {
       <SafeAreaView
         style={[
           styles.resultScreenContainer,
-          {
-            paddingTop: insets.top + 16,
-            paddingBottom: insets.bottom + 12,
-          },
+          { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 12 },
         ]}
         edges={["top", "bottom"]}
       >
-        {/* 헤더 */}
         <View style={styles.resultHeaderRow}>
           <View style={{ flex: 1, paddingRight: 8 }}>
             <Text style={styles.sectionTitle}>
-              {ott?.name || "OTT"}에서 볼 수 있는 작품
+              {language.startsWith("en")
+                ? `${ott?.name || "OTT"}${t(language, "resultsTitleSuffix")}`
+                : `${ott?.name || "OTT"}${t(language, "resultsTitleSuffix")}`}
             </Text>
-            <Text style={styles.smallText}>
-              "<Text style={styles.moodHighlight}>{mood}</Text>" 기분에 맞는
-              작품을 추천했어요.
-            </Text>
+
+            {language.startsWith("en") ? (
+              <Text style={styles.smallText}>
+                {t(language, "recommendLinePrefix")}
+                <Text style={styles.moodHighlight}>{moodLabel}</Text>
+                {t(language, "recommendLineSuffix")}
+              </Text>
+            ) : (
+              <Text style={styles.smallText}>
+                "<Text style={styles.moodHighlight}>{moodLabel}</Text>"
+                {t(language, "recommendLineSuffix")}
+              </Text>
+            )}
           </View>
 
           <View style={styles.resultMoodRight}>
@@ -703,23 +950,34 @@ function ResultsScreen({ route, navigation }) {
               onPress={() => navigation.navigate("Mood")}
               activeOpacity={0.7}
             >
-              <Text style={styles.resultMoodResetText}>기분 다시선택</Text>
+              <Text style={styles.resultMoodResetText}>
+                {t(language, "moodReset")}
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.resultMoodResetButton}
-              onPress={() => navigation.navigate("OttSelect", { mood })}
+              onPress={() =>
+                navigation.navigate("OttSelect", {
+                  mood,
+                  language,
+                  watchRegion,
+                })
+              }
               activeOpacity={0.7}
             >
-              <Text style={styles.resultMoodResetText}>OTT 다시선택</Text>
+              <Text style={styles.resultMoodResetText}>
+                {t(language, "ottReset")}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* 즐겨찾기 섹션 */}
         {favorites.length > 0 && (
           <View style={styles.favoritesSection}>
-            <Text style={styles.smallText}>내가 저장한 작품</Text>
+            <Text style={styles.smallText}>
+              {t(language, "favoritesTitle")}
+            </Text>
             <FlatList
               data={favorites}
               keyExtractor={(item) => `fav-${item.id}`}
@@ -731,36 +989,30 @@ function ResultsScreen({ route, navigation }) {
           </View>
         )}
 
-        {/* 본문 리스트 */}
         {loading ? (
           <View
             style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
           >
             <ActivityIndicator size="large" color="#FFFFFF" />
             <Text style={[styles.smallText, { marginTop: 8 }]}>
-              추천 작품을 불러오는 중입니다...
+              {t(language, "loading")}
             </Text>
           </View>
         ) : movies.length === 0 ? (
           <View
             style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
           >
-            <Text style={styles.smallText}>
-              조건에 맞는 작품을 찾지 못했어요.
-            </Text>
+            <Text style={styles.smallText}>{t(language, "notFound")}</Text>
           </View>
         ) : (
           <FlatList
             data={movies}
             keyExtractor={(item) => String(item.id)}
             renderItem={renderMovieCard}
-            contentContainerStyle={{
-              paddingBottom: insets.bottom + 24,
-            }}
+            contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
           />
         )}
 
-        {/* 상세 모달 */}
         <Modal
           visible={detailModalVisible}
           transparent
@@ -777,7 +1029,9 @@ function ResultsScreen({ route, navigation }) {
                   style={styles.modalCloseButton}
                   onPress={closeDetail}
                 >
-                  <Text style={styles.modalCloseText}>닫기</Text>
+                  <Text style={styles.modalCloseText}>
+                    {t(language, "close")}
+                  </Text>
                 </TouchableOpacity>
               </View>
 
@@ -800,25 +1054,29 @@ function ResultsScreen({ route, navigation }) {
                   />
                 )}
 
-                <Text style={styles.modalSectionTitle}>기본 정보</Text>
-                <Text style={styles.modalText}>
-                  개봉일:{" "}
-                  {selectedMovieDetail?.release_date ||
-                    selectedMovie?.release_date ||
-                    "정보 없음"}
+                <Text style={styles.modalSectionTitle}>
+                  {t(language, "baseInfo")}
                 </Text>
                 <Text style={styles.modalText}>
-                  평점:{" "}
+                  {t(language, "releaseDate")}:{" "}
+                  {selectedMovieDetail?.release_date ||
+                    selectedMovie?.release_date ||
+                    t(language, "infoNA")}
+                </Text>
+                <Text style={styles.modalText}>
+                  {t(language, "rating")}:{" "}
                   {selectedMovieDetail?.vote_average?.toFixed(1) ||
                     selectedMovie?.vote_average?.toFixed(1) ||
                     "N/A"}
                 </Text>
 
-                <Text style={styles.modalSectionTitle}>줄거리</Text>
+                <Text style={styles.modalSectionTitle}>
+                  {t(language, "overview")}
+                </Text>
                 <Text style={styles.modalText}>
                   {selectedMovieDetail?.overview ||
                     selectedMovie?.overview ||
-                    "줄거리 정보가 없습니다."}
+                    t(language, "noOverview")}
                 </Text>
 
                 {selectedMovie && trailers[selectedMovie.id] && (
@@ -827,7 +1085,7 @@ function ResultsScreen({ route, navigation }) {
                     onPress={() => openTrailer(selectedMovie.id)}
                   >
                     <Text style={styles.modalTrailerButtonText}>
-                      ▶ YouTube 예고편
+                      {t(language, "youtubeTrailer")}
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -846,6 +1104,14 @@ function ResultsScreen({ route, navigation }) {
 const Stack = createNativeStackNavigator();
 
 function RootNavigator() {
+  // 기기 지역/언어로 기본값 결정
+  const deviceRegion = Localization.region || "KR";
+  const primaryLocale = Localization.getLocales()?.[0]?.languageTag || "ko-KR";
+
+  const watchRegion = deviceRegion === "US" ? "US" : "KR";
+  const language =
+    primaryLocale.startsWith("en") || watchRegion === "US" ? "en-US" : "ko-KR";
+
   return (
     <NavigationContainer>
       <StatusBar barStyle="light-content" backgroundColor="#050816" />
@@ -855,9 +1121,21 @@ function RootNavigator() {
           contentStyle: { backgroundColor: "#050816" },
         }}
       >
-        <Stack.Screen name="Mood" component={MoodScreen} />
-        <Stack.Screen name="OttSelect" component={OttSelectScreen} />
-        <Stack.Screen name="Results" component={ResultsScreen} />
+        <Stack.Screen
+          name="Mood"
+          component={MoodScreen}
+          initialParams={{ language, watchRegion }}
+        />
+        <Stack.Screen
+          name="OttSelect"
+          component={OttSelectScreen}
+          initialParams={{ language, watchRegion }}
+        />
+        <Stack.Screen
+          name="Results"
+          component={ResultsScreen}
+          initialParams={{ language, watchRegion }}
+        />
       </Stack.Navigator>
     </NavigationContainer>
   );
@@ -875,7 +1153,6 @@ export default function App() {
 // 스타일
 // =========================
 const styles = StyleSheet.create({
-  // 공통
   screenRoot: {
     flex: 1,
     backgroundColor: "#050816",
@@ -1045,9 +1322,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#9CA3AF",
   },
-  movieList: {
-    paddingBottom: 24,
-  },
   movieCard: {
     flexDirection: "row",
     borderRadius: 16,
@@ -1120,7 +1394,6 @@ const styles = StyleSheet.create({
     color: "#F9FAFB",
   },
 
-  // 즐겨찾기
   favoritesSection: {
     marginTop: 16,
     marginBottom: 8,
