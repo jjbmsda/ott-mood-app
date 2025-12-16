@@ -1126,31 +1126,26 @@ function ResultsScreen({ route, navigation }) {
         edges={["top", "bottom"]}
       >
         <View style={styles.resultHeaderRow}>
-          <View style={{ flex: 1, paddingRight: 8 }}>
-            <Text style={styles.sectionTitle}>
-              {`${ott?.name || "OTT"}${t(language, "resultsTitleSuffix")}`}
-            </Text>
-
-            {language.startsWith("en") ? (
-              <Text style={styles.smallText}>
-                {t(language, "recommendLinePrefix")}
-                <Text style={styles.moodHighlight}>{moodLabel}</Text>
-                {t(language, "recommendLineSuffix")}
-              </Text>
+          {/* 왼쪽: OTT 로고 */}
+          <View style={styles.resultHeaderLeft}>
+            {ott?.logo ? (
+              <Image source={ott.logo} style={styles.resultHeaderOttLogo} />
+            ) : ott?.logoUrl ? (
+              <Image
+                source={{ uri: ott.logoUrl }}
+                style={styles.resultHeaderOttLogo}
+              />
             ) : (
-              <Text style={styles.smallText}>
-                "<Text style={styles.moodHighlight}>{moodLabel}</Text>"
-                {t(language, "recommendLineSuffix")}
-              </Text>
+              <Text style={styles.sectionTitle}>{ott?.name || "OTT"}</Text>
             )}
           </View>
 
-          <View style={styles.resultMoodRight}>
+          {/* 오른쪽(근데 왼쪽으로 당겨진 버튼 묶음) */}
+          <View style={styles.resultHeaderActions}>
             <TouchableOpacity
               style={styles.resultMoodResetButton}
-              onPress={() =>
-                navigation.navigate("Mood", { language, watchRegion })
-              }
+              onPress={() => navigation.navigate("Mood")}
+              activeOpacity={0.7}
             >
               <Text style={styles.resultMoodResetText}>
                 {t(language, "moodReset")}
@@ -1166,15 +1161,16 @@ function ResultsScreen({ route, navigation }) {
                   watchRegion,
                 })
               }
+              activeOpacity={0.7}
             >
               <Text style={styles.resultMoodResetText}>
                 {t(language, "ottReset")}
               </Text>
             </TouchableOpacity>
 
-            {/* 🌍 언어/지역 선택 */}
+            {/* 🌍 버튼 (너가 이미 만든 Pref 화면으로 이동시키면 됨) */}
             <TouchableOpacity
-              style={styles.languageButton}
+              style={styles.globeButton}
               onPress={() =>
                 navigation.navigate("LanguageRegion", {
                   language,
@@ -1183,7 +1179,7 @@ function ResultsScreen({ route, navigation }) {
               }
               activeOpacity={0.7}
             >
-              <Text style={styles.languageButtonText}>🌍</Text>
+              <Text style={styles.globeText}>🌍</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1425,6 +1421,59 @@ export default function App() {
 // 스타일
 // =========================
 const styles = StyleSheet.create({
+  resultHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-start", // 왼쪽 정렬
+    marginBottom: 12,
+  },
+
+  resultHeaderLeft: {
+    paddingRight: 10,
+  },
+
+  resultHeaderOttLogo: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+  },
+
+  resultHeaderActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginLeft: 6, // 로고와 버튼 사이 간격
+  },
+
+  resultMoodResetButton: {
+    marginLeft: 6, // 버튼 간격(왼쪽으로 좀 더 붙임)
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 999,
+    backgroundColor: "#111827",
+  },
+
+  globeButton: {
+    marginLeft: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    backgroundColor: "#111827",
+  },
+
+  globeText: {
+    fontSize: 14,
+    color: "#9CA3AF",
+  },
+  ottHeaderLogoRow: {
+    height: 28,
+    justifyContent: "center",
+    marginBottom: 6,
+  },
+  ottHeaderLogo: {
+    width: 100, // 로고 가로 길이(원하면 조절)
+    height: 50,
+    resizeMode: "contain",
+  },
   languageButton: {
     marginLeft: 8,
     paddingVertical: 4,
