@@ -63,8 +63,7 @@ const STRINGS = {
     regionUS: "US",
     // ✅ 새 화면
     chooseTitle: "언어 / 지역 선택",
-    chooseDesc:
-      "먼저 언어와 지역을 선택해 주세요.\n(한국에서 영어/미국 OTT 테스트도 여기서 가능)",
+    chooseDesc: "먼저 언어와 지역을 선택해 주세요.",
     start: "시작하기",
     autoDetect: "자동 설정",
     langKR: "한국어",
