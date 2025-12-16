@@ -4,9 +4,25 @@ export default {
     slug: "ott-mood-app",
     plugins: ["expo-localization"],
 
+    // ✅ QR 카드/프로젝트 메타에 쓰이는 기본 아이콘
+    icon: "./assets/icon.png",
+
     android: {
       package: "com.oneul.moviemood",
+
+      // ✅ 안드로이드 런처용 Adaptive Icon
+      adaptiveIcon: {
+        foregroundImage: "./assets/adaptive_icon.png",
+        backgroundColor: "#050816",
+      },
     },
+
+    // (선택) 스플래시도 같이 맞추고 싶으면 주석 해제해서 사용
+    // splash: {
+    //   image: "./assets/splash.png",
+    //   resizeMode: "contain",
+    //   backgroundColor: "#050816",
+    // },
 
     extra: {
       tmdbApiKey: process.env.TMDB_API_KEY,

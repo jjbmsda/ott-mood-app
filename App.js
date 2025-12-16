@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -61,6 +61,16 @@ const STRINGS = {
     pickRegion: "지역",
     regionKR: "KR",
     regionUS: "US",
+    // ✅ 새 화면
+    chooseTitle: "언어 / 지역 선택",
+    chooseDesc:
+      "먼저 언어와 지역을 선택해 주세요.\n(한국에서 영어/미국 OTT 테스트도 여기서 가능)",
+    start: "시작하기",
+    autoDetect: "자동 설정",
+    langKR: "한국어",
+    langEN: "English",
+    regionKorea: "Korea (KR)",
+    regionUSA: "United States (US)",
   },
   "en-US": {
     moodTopLabel: "Today's Mood",
@@ -95,6 +105,16 @@ const STRINGS = {
     pickRegion: "Region",
     regionKR: "KR",
     regionUS: "US",
+    // ✅ 새 화면
+    chooseTitle: "Choose language & region",
+    chooseDesc:
+      "Select language and region first.\n(You can test US/English even in Korea.)",
+    start: "Start",
+    autoDetect: "Auto",
+    langKR: "Korean",
+    langEN: "English",
+    regionKorea: "Korea (KR)",
+    regionUSA: "United States (US)",
   },
 };
 
@@ -248,11 +268,7 @@ const MOOD_QUESTIONS_EN = [
         text: "Something deep and emotional",
         weights: { 우울해요: 2, 설레요: 1 },
       },
-      {
-        id: "q1_o3",
-        text: "Thrilling and intense",
-        weights: { 신나요: 3 },
-      },
+      { id: "q1_o3", text: "Thrilling and intense", weights: { 신나요: 3 } },
       {
         id: "q1_o4",
         text: "Anything, I just want to watch",
@@ -379,15 +395,177 @@ async function fetchWatchProvidersMovie({ region, language }) {
 }
 
 // =========================
-// 1. MoodScreen
+// 0. Language/Region 선택 화면 (NEW)
 // =========================
-function MoodScreen({ navigation, route }) {
+function LanguageRegionScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const {
     language = "ko-KR",
     watchRegion = "KR",
     setAppPrefs,
   } = route.params || {};
+
+  const [localLang, setLocalLang] = useState(language);
+  const [localRegion, setLocalRegion] = useState(watchRegion);
+
+  const applyAuto = async () => {
+    const deviceRegion = Localization.region || "KR";
+    const primaryLocale =
+      Localization.getLocales()?.[0]?.languageTag || "ko-KR";
+
+    const nextRegion = deviceRegion === "US" ? "US" : "KR";
+    const nextLang =
+      primaryLocale.startsWith("en") || nextRegion === "US" ? "en-US" : "ko-KR";
+
+    setLocalRegion(nextRegion);
+    setLocalLang(nextLang);
+    await setAppPrefs?.({ watchRegion: nextRegion, language: nextLang });
+  };
+
+  const start = async () => {
+    await setAppPrefs?.({ watchRegion: localRegion, language: localLang });
+    navigation.reset({
+      index: 0,
+      routes: [
+        {
+          name: "Mood",
+          params: { language: localLang, watchRegion: localRegion },
+        },
+      ],
+    });
+  };
+
+  return (
+    <View style={styles.screenRoot}>
+      <SafeAreaView
+        style={[
+          styles.langScreenContainer,
+          { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 16 },
+        ]}
+        edges={["top", "bottom"]}
+      >
+        <Text style={styles.sectionTitle}>{t(localLang, "chooseTitle")}</Text>
+        <Text style={styles.smallText}>{t(localLang, "chooseDesc")}</Text>
+
+        <View style={{ height: 18 }} />
+
+        <Text style={styles.langSectionLabel}>{t(localLang, "pickLang")}</Text>
+        <View style={styles.langRow}>
+          <TouchableOpacity
+            style={[
+              styles.langChip,
+              localLang === "ko-KR" && styles.langChipSelected,
+            ]}
+            onPress={() => setLocalLang("ko-KR")}
+            activeOpacity={0.85}
+          >
+            <Text
+              style={[
+                styles.langChipText,
+                localLang === "ko-KR" && styles.langChipTextSelected,
+              ]}
+            >
+              {t(localLang, "langKR")}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.langChip,
+              localLang === "en-US" && styles.langChipSelected,
+            ]}
+            onPress={() => setLocalLang("en-US")}
+            activeOpacity={0.85}
+          >
+            <Text
+              style={[
+                styles.langChipText,
+                localLang === "en-US" && styles.langChipTextSelected,
+              ]}
+            >
+              {t(localLang, "langEN")}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={{ height: 18 }} />
+
+        <Text style={styles.langSectionLabel}>
+          {t(localLang, "pickRegion")}
+        </Text>
+        <View style={styles.langRow}>
+          <TouchableOpacity
+            style={[
+              styles.langChip,
+              localRegion === "KR" && styles.langChipSelected,
+            ]}
+            onPress={() => setLocalRegion("KR")}
+            activeOpacity={0.85}
+          >
+            <Text
+              style={[
+                styles.langChipText,
+                localRegion === "KR" && styles.langChipTextSelected,
+              ]}
+            >
+              {t(localLang, "regionKorea")}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.langChip,
+              localRegion === "US" && styles.langChipSelected,
+            ]}
+            onPress={() => setLocalRegion("US")}
+            activeOpacity={0.85}
+          >
+            <Text
+              style={[
+                styles.langChipText,
+                localRegion === "US" && styles.langChipTextSelected,
+              ]}
+            >
+              {t(localLang, "regionUSA")}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={{ height: 14 }} />
+
+        <TouchableOpacity
+          style={styles.langSecondaryButton}
+          onPress={applyAuto}
+          activeOpacity={0.9}
+        >
+          <Text style={styles.langSecondaryButtonText}>
+            {t(localLang, "autoDetect")}
+          </Text>
+        </TouchableOpacity>
+
+        <View style={{ flex: 1 }} />
+
+        <TouchableOpacity
+          style={styles.langPrimaryButton}
+          onPress={start}
+          activeOpacity={0.9}
+        >
+          <Text style={styles.langPrimaryButtonText}>
+            {t(localLang, "start")}
+          </Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    </View>
+  );
+}
+
+// =========================
+// 1. MoodScreen
+// (✅ 상단 토글 제거 + 첫 화면에서만 선택)
+// =========================
+function MoodScreen({ navigation, route }) {
+  const insets = useSafeAreaInsets();
+  const { language = "ko-KR", watchRegion = "KR" } = route.params || {};
 
   const MOOD_QUESTIONS = language.startsWith("en")
     ? MOOD_QUESTIONS_EN
@@ -478,19 +656,6 @@ function MoodScreen({ navigation, route }) {
     setError("");
   };
 
-  const setLanguageOverride = async (nextLang) => {
-    await setAppPrefs?.({ language: nextLang });
-    // navigation param 동기화 (현재 화면)
-    navigation.setParams({ language: nextLang });
-  };
-
-  const setRegionOverride = async (nextRegion) => {
-    // 지역 바꾸면 기본 언어도 같이 바꾸는 게 자연스러움
-    const nextLang = nextRegion === "US" ? "en-US" : "ko-KR";
-    await setAppPrefs?.({ watchRegion: nextRegion, language: nextLang });
-    navigation.setParams({ watchRegion: nextRegion, language: nextLang });
-  };
-
   return (
     <View style={styles.screenRoot}>
       <SafeAreaView
@@ -503,67 +668,9 @@ function MoodScreen({ navigation, route }) {
         {/* 상단 */}
         <View style={styles.moodTopRow}>
           <Text style={styles.moodTopLabel}>{t(language, "moodTopLabel")}</Text>
-
-          {/* 언어/지역 토글 */}
-          <View style={styles.topTogglesRow}>
-            <View style={styles.toggleGroup}>
-              <Text style={styles.toggleLabel}>{t(language, "pickLang")}</Text>
-              <TouchableOpacity
-                onPress={() => setLanguageOverride("ko-KR")}
-                style={[
-                  styles.langButton,
-                  language === "ko-KR" && styles.langButtonActive,
-                ]}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.langButtonText}>KR</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => setLanguageOverride("en-US")}
-                style={[
-                  styles.langButton,
-                  language === "en-US" && styles.langButtonActive,
-                ]}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.langButtonText}>EN</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={[styles.toggleGroup, { marginLeft: 10 }]}>
-              <Text style={styles.toggleLabel}>
-                {t(language, "pickRegion")}
-              </Text>
-              <TouchableOpacity
-                onPress={() => setRegionOverride("KR")}
-                style={[
-                  styles.langButton,
-                  watchRegion === "KR" && styles.langButtonActive,
-                ]}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.langButtonText}>
-                  {t(language, "regionKR")}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => setRegionOverride("US")}
-                style={[
-                  styles.langButton,
-                  watchRegion === "US" && styles.langButtonActive,
-                ]}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.langButtonText}>
-                  {t(language, "regionUS")}
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.moodTopStep}>
-              {currentIndex + 1}/{totalQuestions}
-            </Text>
-          </View>
+          <Text style={styles.moodTopStep}>
+            {currentIndex + 1}/{totalQuestions}
+          </Text>
         </View>
 
         {/* 질문 */}
@@ -1005,9 +1112,7 @@ function ResultsScreen({ route, navigation }) {
         <View style={styles.resultHeaderRow}>
           <View style={{ flex: 1, paddingRight: 8 }}>
             <Text style={styles.sectionTitle}>
-              {language.startsWith("en")
-                ? `${ott?.name || "OTT"}${t(language, "resultsTitleSuffix")}`
-                : `${ott?.name || "OTT"}${t(language, "resultsTitleSuffix")}`}
+              {`${ott?.name || "OTT"}${t(language, "resultsTitleSuffix")}`}
             </Text>
 
             {language.startsWith("en") ? (
@@ -1027,7 +1132,9 @@ function ResultsScreen({ route, navigation }) {
           <View style={styles.resultMoodRight}>
             <TouchableOpacity
               style={styles.resultMoodResetButton}
-              onPress={() => navigation.navigate("Mood")}
+              onPress={() =>
+                navigation.navigate("Mood", { language, watchRegion })
+              }
               activeOpacity={0.7}
             >
               <Text style={styles.resultMoodResetText}>
@@ -1189,10 +1296,17 @@ function RootNavigator({ language, watchRegion, setAppPrefs }) {
           contentStyle: { backgroundColor: "#050816" },
         }}
       >
+        {/* ✅ 맨 처음 선택 화면 */}
+        <Stack.Screen
+          name="LanguageRegion"
+          component={LanguageRegionScreen}
+          initialParams={{ language, watchRegion, setAppPrefs }}
+        />
+
         <Stack.Screen
           name="Mood"
           component={MoodScreen}
-          initialParams={{ language, watchRegion, setAppPrefs }}
+          initialParams={{ language, watchRegion }}
         />
         <Stack.Screen
           name="OttSelect"
@@ -1228,7 +1342,6 @@ export default function App() {
           setWatchRegion(savedRegion);
         }
 
-        // 기본값 계산(저장값 없을 때만)
         const deviceRegion = Localization.region || "KR";
         const primaryLocale =
           Localization.getLocales()?.[0]?.languageTag || "ko-KR";
@@ -1250,7 +1363,6 @@ export default function App() {
         setWatchRegion((prev) => prev ?? defaultRegion);
         setLanguage((prev) => prev ?? defaultLang);
       } catch (e) {
-        // 최악의 경우 fallback
         setWatchRegion("KR");
         setLanguage("ko-KR");
       }
@@ -1258,7 +1370,6 @@ export default function App() {
   }, []);
 
   const setAppPrefs = async (patch) => {
-    // patch: { language?: "ko-KR"|"en-US", watchRegion?: "KR"|"US" }
     if (patch.language) {
       setLanguage(patch.language);
       await AsyncStorage.setItem("@language", patch.language);
@@ -1307,34 +1418,66 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  // top toggle UI
-  topTogglesRow: {
+  // ✅ Language/Region Screen
+  langScreenContainer: {
+    flex: 1,
+    paddingHorizontal: 20,
+  },
+  langSectionLabel: {
+    fontSize: 13,
+    color: "#9CA3AF",
+    marginBottom: 10,
+    marginTop: 4,
+  },
+  langRow: {
     flexDirection: "row",
+    gap: 10,
+  },
+  langChip: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: "#0B1120",
+    borderWidth: 1,
+    borderColor: "#111827",
     alignItems: "center",
+    justifyContent: "center",
   },
-  toggleGroup: {
-    flexDirection: "row",
-    alignItems: "center",
+  langChipSelected: {
+    borderColor: "#3B82F6",
+    backgroundColor: "#111827",
   },
-  toggleLabel: {
-    fontSize: 11,
-    color: "#6B7280",
-    marginRight: 6,
+  langChipText: {
+    fontSize: 14,
+    color: "#E5E7EB",
+    fontWeight: "600",
   },
-  langButton: {
-    paddingVertical: 4,
-    paddingHorizontal: 8,
+  langChipTextSelected: {
+    color: "#F9FAFB",
+  },
+  langSecondaryButton: {
+    paddingVertical: 10,
     borderRadius: 999,
     backgroundColor: "#111827",
-    marginLeft: 6,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  langButtonActive: {
-    backgroundColor: "#2563EB",
+  langSecondaryButtonText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#E5E7EB",
   },
-  langButtonText: {
-    fontSize: 12,
-    color: "#F9FAFB",
-    fontWeight: "600",
+  langPrimaryButton: {
+    paddingVertical: 14,
+    borderRadius: 999,
+    backgroundColor: "#F9FAFB",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  langPrimaryButtonText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#020617",
   },
 
   // 1. MoodScreen
