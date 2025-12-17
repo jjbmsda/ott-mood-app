@@ -16,12 +16,24 @@ export default function SettingsScreen({ navigation, route }) {
   const [lang, setLang] = useState(language);
   const [region, setRegion] = useState(watchRegion);
 
-  const save = async () => {
-    await AsyncStorage.setItem("@language", lang);
-    await AsyncStorage.setItem("@watchRegion", region);
+  const persistAndGo = async (nextLang, nextRegion) => {
+    setLang(nextLang);
+    setRegion(nextRegion);
 
-    // ✅ 이전 화면들이 params로 language/watchRegion을 쓰는 구조라면, 돌아가면서 갱신
-    navigation.navigate("Mood", { language: lang, watchRegion: region });
+    await AsyncStorage.setItem("@language", nextLang);
+    await AsyncStorage.setItem("@watchRegion", nextRegion);
+    await AsyncStorage.setItem("@didPickPrefs", "1");
+
+    // ✅ 앱 전체에서 params로 쓰는 값 동기화
+    navigation.reset({
+      index: 0,
+      routes: [
+        {
+          name: "Mood",
+          params: { language: nextLang, watchRegion: nextRegion },
+        },
+      ],
+    });
   };
 
   return (
@@ -33,19 +45,24 @@ export default function SettingsScreen({ navigation, route }) {
         ]}
         edges={["top", "bottom"]}
       >
-        <Text style={styles.sectionTitle}>{t(lang, "settings")}</Text>
+        <Text style={styles.sectionTitle}>
+          {lang.startsWith("en") ? "Language & Region" : "언어 / 지역 선택"}
+        </Text>
 
         <Text style={[styles.smallText, { marginBottom: 10 }]}>
           {t(lang, "pickLang")}
         </Text>
-        <View style={{ flexDirection: "row", marginBottom: 16 }}>
+        <View style={{ flexDirection: "row", marginBottom: 18 }}>
           <TouchableOpacity
-            onPress={() => setLang("ko-KR")}
+            onPress={() =>
+              persistAndGo("ko-KR", region === "US" ? "KR" : region)
+            }
             style={[
               styles.resultMoodResetButton,
-              { marginLeft: 0 },
+              { marginLeft: 0, paddingVertical: 6, paddingHorizontal: 10 },
               lang === "ko-KR" && { backgroundColor: "#2563EB" },
             ]}
+            activeOpacity={0.85}
           >
             <Text style={[styles.resultMoodResetText, { color: "#F9FAFB" }]}>
               KR
@@ -53,11 +70,15 @@ export default function SettingsScreen({ navigation, route }) {
           </TouchableOpacity>
 
           <TouchableOpacity
-            onPress={() => setLang("en-US")}
+            onPress={() =>
+              persistAndGo("en-US", region === "KR" ? "US" : region)
+            }
             style={[
               styles.resultMoodResetButton,
+              { paddingVertical: 6, paddingHorizontal: 10 },
               lang === "en-US" && { backgroundColor: "#2563EB" },
             ]}
+            activeOpacity={0.85}
           >
             <Text style={[styles.resultMoodResetText, { color: "#F9FAFB" }]}>
               EN
@@ -68,17 +89,15 @@ export default function SettingsScreen({ navigation, route }) {
         <Text style={[styles.smallText, { marginBottom: 10 }]}>
           {t(lang, "pickRegion")}
         </Text>
-        <View style={{ flexDirection: "row", marginBottom: 24 }}>
+        <View style={{ flexDirection: "row" }}>
           <TouchableOpacity
-            onPress={() => {
-              setRegion("KR");
-              setLang("ko-KR");
-            }}
+            onPress={() => persistAndGo("ko-KR", "KR")}
             style={[
               styles.resultMoodResetButton,
-              { marginLeft: 0 },
+              { marginLeft: 0, paddingVertical: 6, paddingHorizontal: 10 },
               region === "KR" && { backgroundColor: "#2563EB" },
             ]}
+            activeOpacity={0.85}
           >
             <Text style={[styles.resultMoodResetText, { color: "#F9FAFB" }]}>
               {t(lang, "regionKR")}
@@ -86,14 +105,13 @@ export default function SettingsScreen({ navigation, route }) {
           </TouchableOpacity>
 
           <TouchableOpacity
-            onPress={() => {
-              setRegion("US");
-              setLang("en-US");
-            }}
+            onPress={() => persistAndGo("en-US", "US")}
             style={[
               styles.resultMoodResetButton,
+              { paddingVertical: 6, paddingHorizontal: 10 },
               region === "US" && { backgroundColor: "#2563EB" },
             ]}
+            activeOpacity={0.85}
           >
             <Text style={[styles.resultMoodResetText, { color: "#F9FAFB" }]}>
               {t(lang, "regionUS")}
@@ -101,13 +119,11 @@ export default function SettingsScreen({ navigation, route }) {
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity
-          style={styles.moodNextButton}
-          onPress={save}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.moodNextText}>{t(lang, "save")}</Text>
-        </TouchableOpacity>
+        <Text style={[styles.smallText, { marginTop: 18, lineHeight: 18 }]}>
+          {lang.startsWith("en")
+            ? "Pick one option above. It will apply immediately."
+            : "위에서 선택하면 바로 적용됩니다."}
+        </Text>
       </SafeAreaView>
     </View>
   );
