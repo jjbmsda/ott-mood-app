@@ -77,7 +77,7 @@ export default function OttSelectScreen({ navigation, route }) {
           "hulu",
           "amazon prime video",
           "max",
-          "apple tv plus",
+          "apple tv",
           "paramount plus",
           "peacock",
         ];

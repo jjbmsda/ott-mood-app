@@ -1,130 +1,159 @@
-import React, { useState } from "react";
-import { View, Text, TouchableOpacity } from "react-native";
+import React, { useMemo, useState } from "react";
+import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 
-import { styles } from "../styles/common";
-import { t } from "../constants/strings";
+const STR = {
+  "ko-KR": {
+    title: "언어 / 지역 선택",
+    lang: "언어",
+    region: "지역",
+    next: "다음",
+  },
+  "en-US": {
+    title: "Language / Region",
+    lang: "Language",
+    region: "Region",
+    next: "Next",
+  },
+};
 
 export default function SettingsScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
-  const { language = "ko-KR", watchRegion = "KR" } = route.params || {};
 
-  const [lang, setLang] = useState(language);
-  const [region, setRegion] = useState(watchRegion);
+  const {
+    language: initialLang = "ko-KR",
+    watchRegion: initialRegion = "KR",
+    setAppPrefs,
+    markPrefsPicked,
+  } = route.params || {};
 
-  const persistAndGo = async (nextLang, nextRegion) => {
-    setLang(nextLang);
-    setRegion(nextRegion);
+  // ✅ 선택은 로컬 state로만 관리 (바로 이동/저장 X)
+  const [lang, setLang] = useState(initialLang);
+  const [region, setRegion] = useState(initialRegion);
 
-    await AsyncStorage.setItem("@language", nextLang);
-    await AsyncStorage.setItem("@watchRegion", nextRegion);
-    await AsyncStorage.setItem("@didPickPrefs", "1");
+  const uiLang = useMemo(
+    () => (lang?.startsWith("en") ? "en-US" : "ko-KR"),
+    [lang]
+  );
+  const t = (k) => STR[uiLang]?.[k] ?? STR["en-US"][k] ?? k;
 
-    // ✅ 앱 전체에서 params로 쓰는 값 동기화
+  const handleNext = async () => {
+    // ✅ 여기서만 저장 + “선택 완료” 플래그 + 화면 이동
+    await setAppPrefs?.({ language: lang, watchRegion: region });
+    await markPrefsPicked?.();
+
     navigation.reset({
       index: 0,
       routes: [
-        {
-          name: "Mood",
-          params: { language: nextLang, watchRegion: nextRegion },
-        },
+        { name: "Mood", params: { language: lang, watchRegion: region } },
       ],
     });
+  };
+
+  // (선택 UX) region을 US로 바꾸면 언어 기본을 en-US로 맞추고 싶다면 아래처럼
+  const pickRegion = (nextRegion) => {
+    setRegion(nextRegion);
+    if (nextRegion === "US") setLang("en-US");
+    if (nextRegion === "KR") setLang("ko-KR");
   };
 
   return (
     <View style={styles.screenRoot}>
       <SafeAreaView
+        edges={["top", "bottom"]}
         style={[
-          styles.moodScreenContainer,
+          styles.container,
           { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 16 },
         ]}
-        edges={["top", "bottom"]}
       >
-        <Text style={styles.sectionTitle}>
-          {lang.startsWith("en") ? "Language & Region" : "언어 / 지역 선택"}
-        </Text>
+        <Text style={styles.title}>{t("title")}</Text>
 
-        <Text style={[styles.smallText, { marginBottom: 10 }]}>
-          {t(lang, "pickLang")}
-        </Text>
-        <View style={{ flexDirection: "row", marginBottom: 18 }}>
-          <TouchableOpacity
-            onPress={() =>
-              persistAndGo("ko-KR", region === "US" ? "KR" : region)
-            }
-            style={[
-              styles.resultMoodResetButton,
-              { marginLeft: 0, paddingVertical: 6, paddingHorizontal: 10 },
-              lang === "ko-KR" && { backgroundColor: "#2563EB" },
-            ]}
-            activeOpacity={0.85}
-          >
-            <Text style={[styles.resultMoodResetText, { color: "#F9FAFB" }]}>
-              KR
-            </Text>
-          </TouchableOpacity>
+        <View style={styles.section}>
+          <Text style={styles.label}>{t("lang")}</Text>
+          <View style={styles.row}>
+            <TouchableOpacity
+              style={[styles.pill, lang === "ko-KR" && styles.pillActive]}
+              onPress={() => setLang("ko-KR")}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.pillText}>KR</Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            onPress={() =>
-              persistAndGo("en-US", region === "KR" ? "US" : region)
-            }
-            style={[
-              styles.resultMoodResetButton,
-              { paddingVertical: 6, paddingHorizontal: 10 },
-              lang === "en-US" && { backgroundColor: "#2563EB" },
-            ]}
-            activeOpacity={0.85}
-          >
-            <Text style={[styles.resultMoodResetText, { color: "#F9FAFB" }]}>
-              EN
-            </Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.pill, lang === "en-US" && styles.pillActive]}
+              onPress={() => setLang("en-US")}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.pillText}>EN</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
-        <Text style={[styles.smallText, { marginBottom: 10 }]}>
-          {t(lang, "pickRegion")}
-        </Text>
-        <View style={{ flexDirection: "row" }}>
-          <TouchableOpacity
-            onPress={() => persistAndGo("ko-KR", "KR")}
-            style={[
-              styles.resultMoodResetButton,
-              { marginLeft: 0, paddingVertical: 6, paddingHorizontal: 10 },
-              region === "KR" && { backgroundColor: "#2563EB" },
-            ]}
-            activeOpacity={0.85}
-          >
-            <Text style={[styles.resultMoodResetText, { color: "#F9FAFB" }]}>
-              {t(lang, "regionKR")}
-            </Text>
-          </TouchableOpacity>
+        <View style={styles.section}>
+          <Text style={styles.label}>{t("region")}</Text>
+          <View style={styles.row}>
+            <TouchableOpacity
+              style={[styles.pill, region === "KR" && styles.pillActive]}
+              onPress={() => pickRegion("KR")}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.pillText}>KR</Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            onPress={() => persistAndGo("en-US", "US")}
-            style={[
-              styles.resultMoodResetButton,
-              { paddingVertical: 6, paddingHorizontal: 10 },
-              region === "US" && { backgroundColor: "#2563EB" },
-            ]}
-            activeOpacity={0.85}
-          >
-            <Text style={[styles.resultMoodResetText, { color: "#F9FAFB" }]}>
-              {t(lang, "regionUS")}
-            </Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.pill, region === "US" && styles.pillActive]}
+              onPress={() => pickRegion("US")}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.pillText}>US</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
-        <Text style={[styles.smallText, { marginTop: 18, lineHeight: 18 }]}>
-          {lang.startsWith("en")
-            ? "Pick one option above. It will apply immediately."
-            : "위에서 선택하면 바로 적용됩니다."}
-        </Text>
+        {/* ✅ 하단 “다음” 버튼 */}
+        <View style={{ flex: 1 }} />
+        <TouchableOpacity
+          style={styles.nextBtn}
+          onPress={handleNext}
+          activeOpacity={0.9}
+        >
+          <Text style={styles.nextText}>{t("next")}</Text>
+        </TouchableOpacity>
       </SafeAreaView>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  screenRoot: { flex: 1, backgroundColor: "#050816" },
+  container: { flex: 1, paddingHorizontal: 20 },
+  title: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#F9FAFB",
+    marginBottom: 18,
+  },
+  section: { marginBottom: 16 },
+  label: { fontSize: 12, color: "#9CA3AF", marginBottom: 8 },
+  row: { flexDirection: "row" },
+  pill: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    backgroundColor: "#111827",
+    marginRight: 10,
+  },
+  pillActive: { backgroundColor: "#2563EB" },
+  pillText: { color: "#F9FAFB", fontWeight: "700" },
+  nextBtn: {
+    paddingVertical: 14,
+    borderRadius: 999,
+    backgroundColor: "#F9FAFB",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  nextText: { fontSize: 15, fontWeight: "700", color: "#020617" },
+});
