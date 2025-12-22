@@ -24,7 +24,13 @@ import {
   fetchMovieDetail,
   fetchBestTrailer,
 } from "../services/tmdb";
-import { TMDB_IMAGE_BASE } from "../../config/tmdb";
+
+// ✅ TMDB 호출에 필요
+import {
+  TMDB_API_KEY,
+  TMDB_BASE_URL,
+  TMDB_IMAGE_BASE,
+} from "../../config/tmdb";
 
 export default function ResultsScreen({ route, navigation }) {
   const insets = useSafeAreaInsets();
@@ -37,15 +43,26 @@ export default function ResultsScreen({ route, navigation }) {
 
   const [movies, setMovies] = useState([]);
   const [loading, setLoading] = useState(true);
+
   const [favorites, setFavorites] = useState([]);
+
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [selectedMovie, setSelectedMovie] = useState(null);
   const [selectedMovieDetail, setSelectedMovieDetail] = useState(null);
+
   const [trailers, setTrailers] = useState({});
+
+  // ✅ 상세 모달에서만 사용: watch providers
+  const [providersLoading, setProvidersLoading] = useState(false);
+  const [providersList, setProvidersList] = useState([]); // [{provider_id, provider_name, logo_path}]
+  const [providersLink, setProvidersLink] = useState(null);
 
   const moodLabel =
     MOOD_LABELS[mood]?.[language.startsWith("en") ? "en-US" : "ko-KR"] || mood;
 
+  // -------------------------
+  // favorites load
+  // -------------------------
   useEffect(() => {
     (async () => {
       try {
@@ -55,9 +72,13 @@ export default function ResultsScreen({ route, navigation }) {
     })();
   }, []);
 
+  // -------------------------
+  // movie list load
+  // -------------------------
   useEffect(() => {
     if (!ott) return;
     setLoading(true);
+
     (async () => {
       try {
         const data = await fetchOttMovies(
@@ -74,6 +95,9 @@ export default function ResultsScreen({ route, navigation }) {
     })();
   }, [ott, mood, language, watchRegion]);
 
+  // -------------------------
+  // trailer prefetch
+  // -------------------------
   useEffect(() => {
     if (!movies?.length) return;
     let isCancelled = false;
@@ -97,6 +121,9 @@ export default function ResultsScreen({ route, navigation }) {
     };
   }, [movies, language]);
 
+  // -------------------------
+  // favorites save/toggle
+  // -------------------------
   const saveFavorites = async (next) => {
     setFavorites(next);
     await AsyncStorage.setItem("@favorites", JSON.stringify(next));
@@ -110,21 +137,81 @@ export default function ResultsScreen({ route, navigation }) {
     saveFavorites(next);
   };
 
+  // -------------------------
+  // TMDB watch providers (detail modal only)
+  // -------------------------
+  const fetchMovieWatchProviders = async (movieId, region) => {
+    const url = `${TMDB_BASE_URL}/movie/${movieId}/watch/providers?api_key=${TMDB_API_KEY}`;
+    const res = await fetch(url);
+    const json = await res.json();
+
+    const r = json?.results?.[region];
+    if (!r) return { link: null, providers: [] };
+
+    // TMDB 응답 카테고리들에서 provider 합치기
+    const buckets = []
+      .concat(r.flatrate || [])
+      .concat(r.free || [])
+      .concat(r.ads || [])
+      .concat(r.rent || [])
+      .concat(r.buy || []);
+
+    // provider_id 기준 dedup
+    const map = new Map();
+    for (const p of buckets) {
+      if (!p?.provider_id) continue;
+      if (!map.has(p.provider_id)) map.set(p.provider_id, p);
+    }
+
+    return {
+      link: r.link || null,
+      providers: Array.from(map.values()),
+    };
+  };
+
+  // -------------------------
+  // modal open/close
+  // -------------------------
   const openDetail = async (movie) => {
     setSelectedMovie(movie);
+    setSelectedMovieDetail(null);
+
+    // ✅ 이전 provider 상태 초기화
+    setProvidersLoading(true);
+    setProvidersList([]);
+    setProvidersLink(null);
+
     setDetailModalVisible(true);
+
     try {
-      const detail = await fetchMovieDetail(movie.id, { language });
+      const [detail, wp] = await Promise.all([
+        fetchMovieDetail(movie.id, { language }),
+        fetchMovieWatchProviders(movie.id, watchRegion),
+      ]);
+
       setSelectedMovieDetail(detail);
-    } catch (e) {}
+      setProvidersLink(wp.link || null);
+      setProvidersList(wp.providers || []);
+    } catch (e) {
+      // 실패 시 조용히
+    } finally {
+      setProvidersLoading(false);
+    }
   };
 
   const closeDetail = () => {
     setDetailModalVisible(false);
     setSelectedMovie(null);
     setSelectedMovieDetail(null);
+
+    setProvidersLoading(false);
+    setProvidersList([]);
+    setProvidersLink(null);
   };
 
+  // -------------------------
+  // open trailer
+  // -------------------------
   const openTrailer = async (movieId) => {
     const url = trailers[movieId];
     if (!url) {
@@ -140,6 +227,16 @@ export default function ResultsScreen({ route, navigation }) {
     }
   };
 
+  const openProvidersLink = async () => {
+    if (!providersLink) return;
+    try {
+      await Linking.openURL(providersLink);
+    } catch (e) {}
+  };
+
+  // -------------------------
+  // renderers
+  // -------------------------
   const renderMovieCard = ({ item }) => {
     const isFav = favorites.some((f) => f.id === item.id);
     const trailerUrl = trailers[item.id];
@@ -223,6 +320,12 @@ export default function ResultsScreen({ route, navigation }) {
     </TouchableOpacity>
   );
 
+  // ✅ 선택한 OTT가 providersList에 있는지 확인해서 강조
+  const selectedProviderId = ott?.providerId ?? ott?.provider_id ?? null;
+  const hasSelectedOttInProviders =
+    selectedProviderId != null &&
+    providersList.some((p) => p.provider_id === selectedProviderId);
+
   return (
     <View style={styles.screenRoot}>
       <SafeAreaView
@@ -232,7 +335,7 @@ export default function ResultsScreen({ route, navigation }) {
         ]}
         edges={["top", "bottom"]}
       >
-        {/* ✅ 헤더: (원하는대로 더 커스터마이징 가능) */}
+        {/* ✅ 헤더 */}
         <View style={styles.resultHeaderRow}>
           <View style={{ flex: 1, paddingRight: 8 }}>
             <View
@@ -242,7 +345,6 @@ export default function ResultsScreen({ route, navigation }) {
                 marginBottom: 8,
               }}
             >
-              {/* OTT 로고 노출 */}
               {ott?.logo ? (
                 <Image
                   source={ott.logo}
@@ -276,7 +378,6 @@ export default function ResultsScreen({ route, navigation }) {
             </Text>
           </View>
 
-          {/* 오른쪽 버튼 영역 */}
           <View style={styles.resultMoodRight}>
             <TouchableOpacity
               style={[styles.resultMoodResetButton, { marginLeft: 4 }]}
@@ -306,7 +407,6 @@ export default function ResultsScreen({ route, navigation }) {
               </Text>
             </TouchableOpacity>
 
-            {/* 지구본(설정) 버튼 */}
             <TouchableOpacity
               style={[styles.resultMoodResetButton, { marginLeft: 6 }]}
               onPress={() =>
@@ -357,6 +457,7 @@ export default function ResultsScreen({ route, navigation }) {
           />
         )}
 
+        {/* 상세 모달 */}
         <Modal
           visible={detailModalVisible}
           transparent
@@ -423,6 +524,113 @@ export default function ResultsScreen({ route, navigation }) {
                     t(language, "noOverview")}
                 </Text>
 
+                {/* ✅ 여기부터: 시청 가능 OTT (모달 열 때만 조회) */}
+                <Text style={[styles.modalSectionTitle, { marginTop: 14 }]}>
+                  {language.startsWith("en")
+                    ? "Available on"
+                    : "재생 가능한 OTT"}
+                </Text>
+
+                {providersLoading ? (
+                  <View style={{ paddingVertical: 10 }}>
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                    <Text style={[styles.smallText, { marginTop: 6 }]}>
+                      {language.startsWith("en")
+                        ? "Loading providers..."
+                        : "OTT 정보를 불러오는 중..."}
+                    </Text>
+                  </View>
+                ) : providersList.length === 0 ? (
+                  <Text style={styles.modalText}>
+                    {language.startsWith("en")
+                      ? "No provider info for this region."
+                      : "이 지역에서 재생 가능한 OTT 정보를 찾지 못했어요."}
+                  </Text>
+                ) : (
+                  <>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        flexWrap: "wrap",
+                        marginTop: 8,
+                        marginBottom: 8,
+                      }}
+                    >
+                      {providersList.map((p) => {
+                        const isSelected =
+                          selectedProviderId != null &&
+                          p.provider_id === selectedProviderId;
+
+                        return (
+                          <View
+                            key={String(p.provider_id)}
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "center",
+                              paddingVertical: 6,
+                              paddingHorizontal: 10,
+                              borderRadius: 999,
+                              marginRight: 8,
+                              marginBottom: 8,
+                              borderWidth: 1,
+                              borderColor: isSelected ? "#60A5FA" : "#1F2933",
+                              backgroundColor: isSelected
+                                ? "#0B1B3A"
+                                : "#0B1120",
+                            }}
+                          >
+                            {p.logo_path ? (
+                              <Image
+                                source={{
+                                  uri: `https://image.tmdb.org/t/p/w92${p.logo_path}`,
+                                }}
+                                style={{
+                                  width: 18,
+                                  height: 18,
+                                  borderRadius: 4,
+                                  marginRight: 6,
+                                }}
+                              />
+                            ) : null}
+                            <Text style={{ color: "#E5E7EB", fontSize: 12 }}>
+                              {p.provider_name}
+                            </Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+
+                    {/* 선택한 OTT가 providers 목록에 없으면 안내(강제로 합치지 않음) */}
+                    {selectedProviderId != null &&
+                    !hasSelectedOttInProviders ? (
+                      <Text style={[styles.modalText, { color: "#FCA5A5" }]}>
+                        {language.startsWith("en")
+                          ? `Selected OTT (${ott?.name}) is not listed in provider info for this title/region.`
+                          : `선택한 OTT(${ott?.name})가 이 작품/지역의 제공사 목록에 표시되지 않았어요.`}
+                      </Text>
+                    ) : null}
+
+                    {/* TMDB 제공 link 있으면 열기 */}
+                    {providersLink ? (
+                      <TouchableOpacity
+                        onPress={openProvidersLink}
+                        style={[
+                          styles.modalTrailerButton,
+                          { backgroundColor: "#111827", marginTop: 6 },
+                        ]}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={styles.modalTrailerButtonText}>
+                          {language.startsWith("en")
+                            ? "Open watch options"
+                            : "시청 옵션 열기"}
+                        </Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </>
+                )}
+
+                {/* 예고편 버튼 */}
                 {selectedMovie && trailers[selectedMovie.id] && (
                   <TouchableOpacity
                     style={styles.modalTrailerButton}
