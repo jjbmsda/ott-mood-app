@@ -7,7 +7,6 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import * as Localization from "expo-localization";
 
 import MoodScreen from "./src/screens/MoodScreen";
-import OttSelectScreen from "./src/screens/OttSelectScreen";
 import ResultsScreen from "./src/screens/ResultsScreen";
 import SettingsScreen from "./src/screens/SettingsScreen";
 
@@ -21,25 +20,16 @@ export default function App() {
   useEffect(() => {
     (async () => {
       try {
-        // ✅ 저장값은 참고만(시작 화면 결정에 사용 X)
-        const savedLang = await AsyncStorage.getItem("@language");
-        const savedRegion = await AsyncStorage.getItem("@watchRegion");
-
+        // ✅ “새로 시작하면 무조건 설정 화면 뜨게” 하려면
+        // 여기서 saved 값을 아예 쓰지 않거나, 강제로 null 처리하면 됨.
+        // 지금은 네가 원한대로: 저장값 무시하고 기기 기반 기본값으로만 세팅
         const deviceRegion = Localization.region || "KR";
         const primaryLocale =
           Localization.getLocales()?.[0]?.languageTag || "ko-KR";
 
-        const defaultRegion =
-          savedRegion === "KR" || savedRegion === "US"
-            ? savedRegion
-            : deviceRegion === "US"
-            ? "US"
-            : "KR";
-
+        const defaultRegion = deviceRegion === "US" ? "US" : "KR";
         const defaultLang =
-          savedLang === "ko-KR" || savedLang === "en-US"
-            ? savedLang
-            : primaryLocale.startsWith("en") || defaultRegion === "US"
+          primaryLocale.startsWith("en") || defaultRegion === "US"
             ? "en-US"
             : "ko-KR";
 
@@ -72,28 +62,29 @@ export default function App() {
       <StatusBar barStyle="light-content" backgroundColor="#050816" />
       <NavigationContainer>
         <Stack.Navigator
-          // ✅ 무조건 Settings부터 시작
-          initialRouteName="Settings"
           screenOptions={{
             headerShown: false,
             contentStyle: { backgroundColor: "#050816" },
           }}
         >
+          {/* ✅ 시작은 무조건 Settings로 */}
           <Stack.Screen
             name="Settings"
             component={SettingsScreen}
-            initialParams={{ language, watchRegion, setAppPrefs }}
+            initialParams={{
+              language,
+              watchRegion,
+              setAppPrefs,
+              entry: "boot", // ✅ SettingsScreen에서 "Next" 누르면 Mood로 가게 쓰면 됨
+            }}
           />
+
           <Stack.Screen
             name="Mood"
             component={MoodScreen}
-            initialParams={{ language, watchRegion }}
+            initialParams={{ language, watchRegion, setAppPrefs }}
           />
-          <Stack.Screen
-            name="OttSelect"
-            component={OttSelectScreen}
-            initialParams={{ language, watchRegion }}
-          />
+
           <Stack.Screen
             name="Results"
             component={ResultsScreen}

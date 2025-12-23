@@ -79,7 +79,7 @@ export default function MoodScreen({ navigation, route }) {
 
     if (currentIndex === totalQuestions - 1) {
       const mood = calculateMood();
-      navigation.navigate("OttSelect", { mood, language, watchRegion });
+      navigation.navigate("Results", { mood, language, watchRegion });
       return;
     }
 
