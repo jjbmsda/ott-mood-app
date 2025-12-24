@@ -506,10 +506,10 @@ export default function ResultsScreen({ route, navigation }) {
                     <ActivityIndicator size="small" color="#FFFFFF" />
                   </View>
                 ) : providersInRegion.length === 0 ? (
-                  <Text style={styles.modalText}>
+                  <Text style={styles.smallText}>
                     {language.startsWith("en")
-                      ? "No streaming providers found for this region."
-                      : "이 지역에서 제공 OTT 정보를 찾지 못했어요."}
+                      ? "No titles available on streaming services in your region."
+                      : "이 지역에서 바로 볼 수 있는 작품을 찾지 못했어요."}
                   </Text>
                 ) : (
                   <View
