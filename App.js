@@ -75,7 +75,7 @@ export default function App() {
               language,
               watchRegion,
               setAppPrefs,
-              entry: "boot", // ✅ SettingsScreen에서 "Next" 누르면 Mood로 가게 쓰면 됨
+              entry: "boot", // ✅ SettingsScreen에서 "Next" 누르면 Mood로 가게 쓰면 됨.
             }}
           />
 
