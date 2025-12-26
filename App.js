@@ -22,7 +22,7 @@ export default function App() {
       try {
         // ✅ “새로 시작하면 무조건 설정 화면 뜨게” 하려면
         // 여기서 saved 값을 아예 쓰지 않거나, 강제로 null 처리하면 됨.
-        // 지금은 네가 원한대로: 저장값 무시하고 기기 기반 기본값으로만 세팅
+        // 지금은 네가 원한대로: 저장값 무시하고 기기 기반 기본값으로만 세팅.
         const deviceRegion = Localization.region || "KR";
         const primaryLocale =
           Localization.getLocales()?.[0]?.languageTag || "ko-KR";
