@@ -2,6 +2,7 @@ export default {
   expo: {
     name: "OTT Mood",
     slug: "ott-mood-app",
+    version: "1.0.8",
     plugins: ["expo-localization"],
 
     // ✅ QR 카드/프로젝트 메타에 쓰이는 기본 아이콘
@@ -9,6 +10,7 @@ export default {
 
     android: {
       package: "com.oneul.moviemood",
+      versionCode: 5,
 
       // ✅ 안드로이드 런처용 Adaptive Icon
       adaptiveIcon: {
