@@ -8,6 +8,12 @@ export default {
     // ✅ QR 카드/프로젝트 메타에 쓰이는 기본 아이콘
     icon: "./assets/icon.png",
 
+    ios: {
+      bundleIdentifier: "com.oneul.moviemood",
+      buildNumber: "1.0.8",
+      supportsTablet: true,
+    },
+
     android: {
       package: "com.oneul.moviemood",
       versionCode: 5,
